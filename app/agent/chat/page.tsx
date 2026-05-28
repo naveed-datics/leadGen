@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type Conversation = {
   id: string;
@@ -37,7 +37,7 @@ export default function AgentChatPage() {
   );
   const [starting, setStarting] = useState(false);
 
-  async function loadConversations() {
+  const loadConversations = useCallback(async () => {
     setError(null);
     setSuccess(null);
     setLoading(true);
@@ -53,7 +53,7 @@ export default function AgentChatPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [activeId]);
 
   async function loadMessages(conversationId: string) {
     setError(null);
@@ -73,13 +73,16 @@ export default function AgentChatPage() {
 
   useEffect(() => {
     void loadConversations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadConversations]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("start") === "1") setStartOpen(true);
   }, []);
 
   useEffect(() => {
     if (!activeId) return;
     void loadMessages(activeId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
   async function startChat(e: React.FormEvent) {
