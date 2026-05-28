@@ -1,11 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { BusinessList } from "@/components/BusinessList";
 import { SearchForm } from "@/components/SearchForm";
 import { SearchProgress } from "@/components/SearchProgress";
 import type { SearchResult } from "@/lib/types";
+
+type MeResponse =
+  | {
+      user: {
+        role: "admin" | "agent";
+      };
+    }
+  | { error: string };
+
+type AgentSettingsResponse =
+  | {
+      agent: {
+        region: string | null;
+        serpApiKeyConfigured: boolean;
+        searchEnabled: boolean;
+      };
+    }
+  | { error: string };
+
+type CitiesResponse = { cities: string[] } | { error: string };
 
 export default function Home() {
   const [industry, setIndustry] = useState("");
@@ -26,13 +46,13 @@ export default function Home() {
     async function loadMe() {
       try {
         const res = await fetch("/api/auth/me", { cache: "no-store" });
-        const data = (await res.json()) as any;
+        const data = (await res.json()) as MeResponse;
         if (cancelled) return;
         if (!res.ok) {
           setMeRole(null);
           return;
         }
-        setMeRole(data.user?.role ?? null);
+        setMeRole("user" in data ? data.user.role : null);
       } catch {
         if (!cancelled) setMeRole(null);
       }
@@ -48,23 +68,24 @@ export default function Home() {
     async function loadAgentSettings() {
       if (meRole !== "agent") return;
       const res = await fetch("/api/agent/settings", { cache: "no-store" });
-      const data = (await res.json()) as any;
+      const data = (await res.json()) as AgentSettingsResponse;
       if (!res.ok) return;
-      const assignedCountry = (data.agent?.region ?? "").trim();
+      if (!("agent" in data)) return;
+      const assignedCountry = (data.agent.region ?? "").trim();
       if (!assignedCountry) return;
       if (!cancelled) setCountry(assignedCountry);
       if (!cancelled) {
-        setSerpApiReady(Boolean(data.agent?.serpApiKeyConfigured));
-        setAgentSearchEnabled(Boolean(data.agent?.searchEnabled));
+        setSerpApiReady(Boolean(data.agent.serpApiKeyConfigured));
+        setAgentSearchEnabled(Boolean(data.agent.searchEnabled));
       }
 
       const citiesRes = await fetch(
         `/api/geo/cities?country=${encodeURIComponent(assignedCountry)}`,
         { cache: "no-store" },
       );
-      const citiesData = (await citiesRes.json()) as any;
+      const citiesData = (await citiesRes.json()) as CitiesResponse;
       if (!citiesRes.ok) return;
-      const list = Array.isArray(citiesData.cities) ? citiesData.cities : [];
+      const list = "cities" in citiesData && Array.isArray(citiesData.cities) ? citiesData.cities : [];
       if (!cancelled) {
         setCities(list);
         if (!city && list.length > 0) setCity(list[0]);
