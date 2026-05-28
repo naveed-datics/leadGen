@@ -6,6 +6,14 @@ import type { CompetitorWithStats, ProposalSummary } from "@/lib/types";
 
 type ModalMode = "create" | "edit" | "view";
 
+type MeResponse =
+  | {
+      user: {
+        name: string;
+      };
+    }
+  | { error: string };
+
 interface ProposalModalProps {
   open: boolean;
   mode: ModalMode;
@@ -43,7 +51,28 @@ export function ProposalModal({
 }: ProposalModalProps) {
   const [body, setBody] = useState(initialBody);
   const [templateLoading, setTemplateLoading] = useState(false);
+  const [senderName, setSenderName] = useState("");
   const readOnly = mode === "view";
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then(async (res) => {
+        const data = (await res.json()) as MeResponse;
+        if (cancelled) return;
+        if (!res.ok || "error" in data) return;
+        setSenderName(data.user.name ?? "");
+      })
+      .catch(() => {
+        if (!cancelled) setSenderName("");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -80,6 +109,7 @@ export function ProposalModal({
             industry,
             location,
             competitors,
+            senderName,
           }),
         );
       })
@@ -91,6 +121,7 @@ export function ProposalModal({
               industry,
               location,
               competitors: [],
+              senderName,
             }),
           );
         }
@@ -111,6 +142,7 @@ export function ProposalModal({
     industry,
     location,
     initialBody,
+    senderName,
   ]);
 
   if (!open) return null;

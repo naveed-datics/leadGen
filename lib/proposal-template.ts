@@ -5,35 +5,62 @@ export interface ProposalTemplateInput {
   industry: string;
   location: string;
   competitors?: CompetitorWithStats[];
+  senderName?: string;
+}
+
+function isSocialWebsiteUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    const host = hostname.toLowerCase().replace(/^www\./, "");
+    const socialHosts = new Set([
+      "facebook.com",
+      "fb.com",
+      "instagram.com",
+      "tiktok.com",
+      "twitter.com",
+      "x.com",
+      "linkedin.com",
+      "youtube.com",
+      "youtu.be",
+      "pinterest.com",
+      "snapchat.com",
+      "telegram.me",
+      "t.me",
+      "whatsapp.com",
+      "wa.me",
+    ]);
+    return socialHosts.has(host);
+  } catch {
+    // If URL parsing fails, treat it as non-social so we don't accidentally drop real sites.
+    return false;
+  }
 }
 
 function formatStatsLine(stats: CompetitorWithStats["stats"]): string | null {
   const parts: string[] = [];
+
   const traffic =
     stats.trafficLabel && stats.trafficEstimate
       ? `${stats.trafficLabel} (${stats.trafficEstimate})`
       : stats.trafficLabel ?? stats.trafficEstimate;
   if (traffic) parts.push(`Traffic: ${traffic}`);
-  if (stats.lastUpdated) parts.push(`Last updated: ${stats.lastUpdated}`);
+
+  if (stats.lastUpdated) parts.push(`Updated ${stats.lastUpdated}`);
+
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function formatCompetitorSection(
-  industry: string,
-  location: string,
   competitors: CompetitorWithStats[],
 ): string {
   const lines = competitors.map((c, i) => {
     const statsLine = formatStatsLine(c.stats);
-    const base = `${i + 1}. ${c.title}\n   Website: ${c.website}`;
-    return statsLine ? `${base}\n   ${statsLine}` : base;
+    const numberEmoji = ["1️⃣", "2️⃣", "3️⃣"][i] ?? `${i + 1}.`;
+    const base = `${numberEmoji} *${c.title}*\nWebsite: ${c.website}`;
+    return statsLine ? `${base}\n${statsLine}` : base;
   });
 
-  return `Nearby ${industry} in ${location} already have a website and are reaching customers online:
-
-${lines.join("\n\n")}
-
-`;
+  return `${lines.join("\n\n")}\n`;
 }
 
 export function buildProposalTemplate({
@@ -41,24 +68,30 @@ export function buildProposalTemplate({
   industry,
   location,
   competitors = [],
+  senderName,
 }: ProposalTemplateInput): string {
+  const competitorsForStats = competitors
+    .filter((c) => c.website?.trim())
+    .filter((c) => !isSocialWebsiteUrl(c.website))
+    .slice(0, 3);
+
   const competitorBlock =
-    competitors.length > 0
-      ? formatCompetitorSection(industry, location, competitors)
+    competitorsForStats.length > 0
+      ? `Let me share some stats 👇\n\n${formatCompetitorSection(competitorsForStats)}`
       : "";
 
-  const competitorPitch =
-    competitors.length > 0
-      ? "Without a website, you may be losing customers to these businesses. "
-      : "";
+  const signature = (senderName ?? "").trim() || "User Name";
 
-  return `Hi ${businessName},
+  return `Hi ${businessName} Team! 👋
 
-We noticed ${businessName} in ${location} may not have a website yet. ${competitorBlock}${competitorPitch}We help ${industry} businesses get online with a professional site that brings in more customers.
+I came across your business profile on Google — really impressive ratings! ⭐
 
-Would you be open to a quick 10-minute call this week to see if we are a good fit?
+But I noticed you don't have a website yet, which is essential in today's digital world. Your nearby competitors already have websites and are getting customers online.
+${competitorBlock ? `\n\n${competitorBlock}` : ""}
 
-Best regards,
-Your Name
-Your Company`;
+It's the right time to come online with a website and start getting potential clients. 🚀
+
+Let's have a quick call — after that, we'll create a *demo website* and finalize it based on your feedback. 😊
+
+${signature},`;
 }
