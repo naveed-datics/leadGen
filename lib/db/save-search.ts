@@ -3,6 +3,7 @@ import { getDb } from "./index";
 import { leads, searchBusinesses, searches } from "./schema";
 
 export async function saveSearch(
+  agentId: string,
   industry: string,
   location: string,
   result: SearchResult,
@@ -11,6 +12,7 @@ export async function saveSearch(
   const [search] = await db
     .insert(searches)
     .values({
+      agentId,
       industry,
       location,
       query: result.query,

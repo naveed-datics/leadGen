@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals, searches } from "@/lib/db/schema";
+import { AuthError, requireAuth } from "@/lib/auth/guards";
 
 export async function GET(
   _request: Request,
@@ -17,12 +18,18 @@ export async function GET(
   }
 
   try {
+    const user = await requireAuth();
     const db = getDb();
 
     const [search] = await db
       .select()
       .from(searches)
-      .where(eq(searches.id, id))
+      .where(
+        and(
+          eq(searches.id, id),
+          user.role === "agent" ? eq(searches.agentId, user.id) : undefined,
+        ),
+      )
       .limit(1);
 
     if (!search) {
@@ -85,6 +92,9 @@ export async function GET(
       })),
     });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const message =
       error instanceof Error ? error.message : "Failed to load search";
     return NextResponse.json({ error: message }, { status: 500 });

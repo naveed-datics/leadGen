@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { saveSearch } from "@/lib/db/save-search";
 import { searchBusinessesWithoutWebsite } from "@/lib/serpapi";
 import type { SearchRequest } from "@/lib/types";
+import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
+import { getDb } from "@/lib/db/index";
+import { searchActivityLogs } from "@/lib/db/schema";
+import { resolveSerpApiKeyForAgent } from "@/lib/integrations/serpapi";
+import { listCitiesForCountry } from "@/lib/geo/cities";
 
 export async function POST(request: Request) {
   let body: SearchRequest;
@@ -15,8 +20,27 @@ export async function POST(request: Request) {
     );
   }
 
+  let agent;
+  try {
+    agent = await requireActiveAgent();
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    return NextResponse.json({ error: message }, { status: 401 });
+  }
+
+  if (!agent.searchEnabled) {
+    return NextResponse.json(
+      { error: "Search disabled by admin" },
+      { status: 403 },
+    );
+  }
+
   const industry = body.industry?.trim() ?? "";
-  const location = body.location?.trim() ?? "";
+  const country = agent.region ?? "";
+  const city = body.city?.trim() ?? "";
 
   if (!industry) {
     return NextResponse.json(
@@ -25,20 +49,27 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!location) {
+  if (!city) {
+    return NextResponse.json({ error: "City is required" }, { status: 400 });
+  }
+
+  const allowedCities = listCitiesForCountry(country);
+  if (allowedCities.length > 0 && !allowedCities.includes(city)) {
     return NextResponse.json(
-      { error: "Location is required" },
-      { status: 400 },
+      { error: `City must be within assigned country (${country})` },
+      { status: 403 },
     );
   }
 
-  const apiKey = process.env.SERPAPI_API_KEY;
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "SerpApi is not configured. Add SERPAPI_API_KEY to .env.local" },
-      { status: 500 },
-    );
+  let apiKey: string;
+  try {
+    apiKey = await resolveSerpApiKeyForAgent(agent.id);
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "SerpApi key is not configured. Add it in Settings.";
+    return NextResponse.json({ error: message }, { status: 403 });
   }
 
   if (!process.env.DATABASE_URL) {
@@ -51,11 +82,18 @@ export async function POST(request: Request) {
   try {
     const result = await searchBusinessesWithoutWebsite(
       industry,
-      location,
+      `${city}, ${country}`,
       apiKey,
     );
 
-    const searchId = await saveSearch(industry, location, result);
+    const db = getDb();
+    await db.insert(searchActivityLogs).values({
+      agentId: agent.id,
+      query: result.query,
+      region: `${city}, ${country}`,
+    });
+
+    const searchId = await saveSearch(agent.id, industry, `${city}, ${country}`, result);
 
     return NextResponse.json({ ...result, searchId });
   } catch (error) {

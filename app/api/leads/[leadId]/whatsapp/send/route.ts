@@ -2,13 +2,32 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals } from "@/lib/db/schema";
-import { isGreenApiConfigured, sendWhatsAppMessage } from "@/lib/whatsapp";
+import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
+import {
+  users,
+  whatsappConversations,
+  whatsappMessages,
+} from "@/lib/db/schema";
+import { decryptSecret } from "@/lib/integrations/crypto";
+import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
+import { sendWhatsAppCloudTextMessage } from "@/lib/integrations/whatsapp-cloud";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ leadId: string }> },
 ) {
   const { leadId } = await params;
+
+  let agent;
+  try {
+    agent = await requireActiveAgent();
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    return NextResponse.json({ error: message }, { status: 401 });
+  }
 
   if (!process.env.DATABASE_URL) {
     return NextResponse.json(
@@ -17,13 +36,10 @@ export async function POST(
     );
   }
 
-  if (!isGreenApiConfigured()) {
+  if (!agent.whatsAppEnabled) {
     return NextResponse.json(
-      {
-        error:
-          "Green API is not configured. Add GREEN_API_INSTANCE_ID and GREEN_API_TOKEN to .env.local, then authorize your WhatsApp at https://green-api.com",
-      },
-      { status: 503 },
+      { error: "WhatsApp is disabled by admin" },
+      { status: 403 },
     );
   }
 
@@ -45,6 +61,26 @@ export async function POST(
   try {
     const db = getDb();
 
+    const [agentRow] = await db
+      .select({
+        waAccessTokenEnc: users.waAccessTokenEnc,
+        waPhoneNumberId: users.waPhoneNumberId,
+      })
+      .from(users)
+      .where(eq(users.id, agent.id))
+      .limit(1);
+
+    const waAccessTokenEnc = agentRow?.waAccessTokenEnc?.trim() ?? "";
+    const waPhoneNumberId = agentRow?.waPhoneNumberId?.trim() ?? "";
+    if (!waAccessTokenEnc || !waPhoneNumberId) {
+      return NextResponse.json(
+        { error: "WhatsApp is not configured. Add credentials in Settings." },
+        { status: 403 },
+      );
+    }
+
+    const waAccessToken = decryptSecret(waAccessTokenEnc);
+
     const [lead] = await db
       .select({
         id: leads.id,
@@ -63,6 +99,14 @@ export async function POST(
     if (!lead.phone?.trim()) {
       return NextResponse.json(
         { error: "This lead has no phone number" },
+        { status: 400 },
+      );
+    }
+
+    const normalizedPhone = normalizePhoneForWhatsApp(lead.phone);
+    if (!normalizedPhone) {
+      return NextResponse.json(
+        { error: "Invalid phone number for WhatsApp" },
         { status: 400 },
       );
     }
@@ -90,7 +134,46 @@ export async function POST(
       );
     }
 
-    await sendWhatsAppMessage(lead.phone, proposalBody);
+    const { waMessageId } = await sendWhatsAppCloudTextMessage(
+      { accessToken: waAccessToken, phoneNumberId: waPhoneNumberId },
+      normalizedPhone,
+      proposalBody,
+    );
+
+    // Store into agent chat inbox.
+    let conversationId: string;
+    const [existingConv] = await db
+      .select({ id: whatsappConversations.id })
+      .from(whatsappConversations)
+      .where(eq(whatsappConversations.leadId, leadId))
+      .limit(1);
+
+    if (existingConv) {
+      conversationId = existingConv.id;
+      await db
+        .update(whatsappConversations)
+        .set({ lastMessageAt: new Date() })
+        .where(eq(whatsappConversations.id, conversationId));
+    } else {
+      const [createdConv] = await db
+        .insert(whatsappConversations)
+        .values({
+          agentId: agent.id,
+          leadId,
+          customerPhone: normalizedPhone,
+          displayName: lead.title,
+        })
+        .returning({ id: whatsappConversations.id });
+      conversationId = createdConv.id;
+    }
+
+    await db.insert(whatsappMessages).values({
+      conversationId,
+      direction: "outbound",
+      body: proposalBody,
+      waMessageId,
+      status: "sent",
+    });
 
     const now = new Date();
     let proposal;

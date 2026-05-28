@@ -109,7 +109,7 @@ export interface SearchDetail {
 
 export interface SearchRequest {
   industry: string;
-  location: string;
+  city: string;
 }
 
 export type WebsiteStatsSource = "measured" | "ai" | "mixed" | "apify";
