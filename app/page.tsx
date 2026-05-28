@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BusinessList } from "@/components/BusinessList";
 import { SearchForm } from "@/components/SearchForm";
 import { SearchProgress } from "@/components/SearchProgress";
@@ -9,14 +9,79 @@ import type { SearchResult } from "@/lib/types";
 
 export default function Home() {
   const [industry, setIndustry] = useState("");
-  const [location, setLocation] = useState("");
+  const [city, setCity] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SearchResult | null>(null);
   const [searched, setSearched] = useState(false);
 
+  const [meRole, setMeRole] = useState<"admin" | "agent" | null>(null);
+  const [country, setCountry] = useState<string>("");
+  const [cities, setCities] = useState<string[]>([]);
+  const [serpApiReady, setSerpApiReady] = useState<boolean>(true);
+  const [agentSearchEnabled, setAgentSearchEnabled] = useState<boolean>(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMe() {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = (await res.json()) as any;
+        if (cancelled) return;
+        if (!res.ok) {
+          setMeRole(null);
+          return;
+        }
+        setMeRole(data.user?.role ?? null);
+      } catch {
+        if (!cancelled) setMeRole(null);
+      }
+    }
+    void loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAgentSettings() {
+      if (meRole !== "agent") return;
+      const res = await fetch("/api/agent/settings", { cache: "no-store" });
+      const data = (await res.json()) as any;
+      if (!res.ok) return;
+      const assignedCountry = (data.agent?.region ?? "").trim();
+      if (!assignedCountry) return;
+      if (!cancelled) setCountry(assignedCountry);
+      if (!cancelled) {
+        setSerpApiReady(Boolean(data.agent?.serpApiKeyConfigured));
+        setAgentSearchEnabled(Boolean(data.agent?.searchEnabled));
+      }
+
+      const citiesRes = await fetch(
+        `/api/geo/cities?country=${encodeURIComponent(assignedCountry)}`,
+        { cache: "no-store" },
+      );
+      const citiesData = (await citiesRes.json()) as any;
+      if (!citiesRes.ok) return;
+      const list = Array.isArray(citiesData.cities) ? citiesData.cities : [];
+      if (!cancelled) {
+        setCities(list);
+        if (!city && list.length > 0) setCity(list[0]);
+      }
+    }
+    void loadAgentSettings();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meRole]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (meRole === "agent" && (!serpApiReady || !agentSearchEnabled)) {
+      return;
+    }
     setLoading(true);
     setError(null);
     setResult(null);
@@ -26,7 +91,7 @@ export default function Home() {
       const response = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ industry, location }),
+        body: JSON.stringify({ industry, city }),
       });
 
       const data = await response.json();
@@ -60,12 +125,39 @@ export default function Home() {
         </p>
       </header>
 
+      {meRole === "agent" && !agentSearchEnabled && (
+        <div
+          role="status"
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100"
+        >
+          Search is disabled by admin.
+        </div>
+      )}
+
+      {meRole === "agent" && agentSearchEnabled && !serpApiReady && (
+        <div
+          role="status"
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100"
+        >
+          Add your SerpApi key in{" "}
+          <Link href="/agent/settings" className="font-medium underline">
+            Settings
+          </Link>{" "}
+          to enable search.
+        </div>
+      )}
+
       <SearchForm
         industry={industry}
-        location={location}
+        location={city}
+        locationLabel={meRole === "agent" ? `Region: ${country || "—"}` : "Location"}
+        locationOptions={meRole === "agent" ? cities : undefined}
+        locationPlaceholder={meRole === "agent" ? "Search city" : "e.g. Austin, TX"}
+        locationLockedToOptions={meRole === "agent"}
+        disabled={meRole === "agent" ? !serpApiReady || !agentSearchEnabled : false}
         loading={loading}
         onIndustryChange={setIndustry}
-        onLocationChange={setLocation}
+        onLocationChange={setCity}
         onSubmit={handleSubmit}
       />
 

@@ -1,7 +1,8 @@
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/index";
 import { searches } from "@/lib/db/schema";
+import { AuthError, requireAuth } from "@/lib/auth/guards";
 
 export async function GET() {
   if (!process.env.DATABASE_URL) {
@@ -12,6 +13,7 @@ export async function GET() {
   }
 
   try {
+    const user = await requireAuth();
     const db = getDb();
     const rows = await db
       .select({
@@ -23,6 +25,7 @@ export async function GET() {
         createdAt: searches.createdAt,
       })
       .from(searches)
+      .where(user.role === "agent" ? eq(searches.agentId, user.id) : undefined)
       .orderBy(desc(searches.createdAt));
 
     return NextResponse.json({
@@ -36,6 +39,9 @@ export async function GET() {
       })),
     });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const message =
       error instanceof Error ? error.message : "Failed to load searches";
     return NextResponse.json({ error: message }, { status: 500 });

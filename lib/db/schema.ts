@@ -10,8 +10,32 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+export const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role").notNull(),
+  region: text("region"),
+  active: boolean("active").notNull().default(true),
+  searchEnabled: boolean("search_enabled").notNull().default(true),
+  serpApiKeyEnc: text("serpapi_key_enc"),
+  waAccessTokenEnc: text("wa_access_token_enc"),
+  waPhoneNumberId: text("wa_phone_number_id"),
+  waBusinessAccountId: text("wa_business_account_id"),
+  waAppId: text("wa_app_id"),
+  whatsAppEnabled: boolean("whatsapp_enabled").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export const searches = pgTable("searches", {
   id: uuid("id").defaultRandom().primaryKey(),
+  agentId: uuid("agent_id").references(() => users.id, { onDelete: "set null" }),
   industry: text("industry").notNull(),
   location: text("location").notNull(),
   query: text("query").notNull(),
@@ -117,6 +141,48 @@ export const leadCompetitorPicks = pgTable("lead_competitor_picks", {
     .notNull(),
 });
 
+export const searchActivityLogs = pgTable("search_activity_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  agentId: uuid("agent_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  query: text("query").notNull(),
+  region: text("region").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const whatsappConversations = pgTable("whatsapp_conversations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  agentId: uuid("agent_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),
+  customerPhone: text("customer_phone").notNull(),
+  displayName: text("display_name"),
+  lastMessageAt: timestamp("last_message_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const whatsappMessages = pgTable("whatsapp_messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  conversationId: uuid("conversation_id")
+    .notNull()
+    .references(() => whatsappConversations.id, { onDelete: "cascade" }),
+  direction: text("direction").notNull(), // inbound | outbound
+  body: text("body").notNull(),
+  waMessageId: text("wa_message_id"),
+  status: text("status").notNull().default("sent"), // sent | delivered | read | failed
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export const searchesRelations = relations(searches, ({ many }) => ({
   leads: many(leads),
   searchBusinesses: many(searchBusinesses),
@@ -167,3 +233,40 @@ export const leadCompetitorPicksRelations = relations(
     }),
   }),
 );
+
+export const usersRelations = relations(users, ({ many }) => ({
+  searchActivityLogs: many(searchActivityLogs),
+  whatsappConversations: many(whatsappConversations),
+}));
+
+export const searchActivityLogsRelations = relations(
+  searchActivityLogs,
+  ({ one }) => ({
+    agent: one(users, {
+      fields: [searchActivityLogs.agentId],
+      references: [users.id],
+    }),
+  }),
+);
+
+export const whatsappConversationsRelations = relations(
+  whatsappConversations,
+  ({ one, many }) => ({
+    agent: one(users, {
+      fields: [whatsappConversations.agentId],
+      references: [users.id],
+    }),
+    lead: one(leads, {
+      fields: [whatsappConversations.leadId],
+      references: [leads.id],
+    }),
+    messages: many(whatsappMessages),
+  }),
+);
+
+export const whatsappMessagesRelations = relations(whatsappMessages, ({ one }) => ({
+  conversation: one(whatsappConversations, {
+    fields: [whatsappMessages.conversationId],
+    references: [whatsappConversations.id],
+  }),
+}));
