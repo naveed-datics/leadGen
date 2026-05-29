@@ -75,9 +75,11 @@ export interface SearchSummary {
   createdAt: string;
 }
 
+export type ProposalStatus = "in_progress" | "sent" | "draft";
+
 export interface ProposalSummary {
   id: string;
-  status: "draft" | "sent";
+  status: ProposalStatus;
   body: string;
   sentAt: string | null;
 }

@@ -6,9 +6,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BusinessDetailModal } from "@/components/BusinessDetailModal";
 import { LeadsTable } from "@/components/LeadsTable";
 import { ProposalModal } from "@/components/ProposalModal";
+import { isProposalInProgress, isProposalSent } from "@/lib/proposal-status";
 import type { LeadWithProposal, ProposalSummary, SearchDetail } from "@/lib/types";
 
 type ModalMode = "create" | "edit" | "view";
+type LeadListMode = "all" | "in_progress" | "applied";
 
 export default function SearchDetailPage() {
   const params = useParams();
@@ -28,6 +30,7 @@ export default function SearchDetailPage() {
   const [checkingWhatsapp, setCheckingWhatsapp] = useState(false);
   const [greenApiConfigured, setGreenApiConfigured] = useState(false);
   const whatsappCheckStarted = useRef(false);
+  const [leadListMode, setLeadListMode] = useState<LeadListMode>("all");
 
   const loadSearch = useCallback(async () => {
     setLoading(true);
@@ -132,8 +135,10 @@ export default function SearchDetailPage() {
     );
   }
 
-  async function handleSave(body: string) {
-    if (!activeLead) return;
+  async function handleSave(body: string): Promise<ProposalSummary> {
+    if (!activeLead) {
+      throw new Error("No active lead selected");
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/leads/${activeLead.id}/proposal`, {
@@ -145,8 +150,10 @@ export default function SearchDetailPage() {
       if (!res.ok) throw new Error(data.error ?? "Save failed");
       updateLeadProposal(activeLead.id, data.proposal);
       setActiveLead((l) => (l ? { ...l, proposal: data.proposal } : l));
+      return data.proposal as ProposalSummary;
     } catch (e) {
       alert(e instanceof Error ? e.message : "Save failed");
+      throw e;
     } finally {
       setSaving(false);
     }
@@ -215,9 +222,66 @@ export default function SearchDetailPage() {
         )}
       </header>
 
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setLeadListMode("all")}
+          className={[
+            "rounded-xl border px-3 py-1.5 text-sm font-medium transition",
+            leadListMode === "all"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100"
+              : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900",
+          ].join(" ")}
+        >
+          All leads ({leads.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setLeadListMode("in_progress")}
+          className={[
+            "rounded-xl border px-3 py-1.5 text-sm font-medium transition",
+            leadListMode === "in_progress"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100"
+              : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900",
+          ].join(" ")}
+        >
+          In progress (
+          {
+            leads.filter(
+              (l) => l.proposal && isProposalInProgress(l.proposal.status),
+            ).length
+          }
+          )
+        </button>
+        <button
+          type="button"
+          onClick={() => setLeadListMode("applied")}
+          className={[
+            "rounded-xl border px-3 py-1.5 text-sm font-medium transition",
+            leadListMode === "applied"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100"
+              : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900",
+          ].join(" ")}
+        >
+          Applied / submitted (
+          {leads.filter((l) => l.proposal && isProposalSent(l.proposal.status)).length}
+          )
+        </button>
+      </div>
+
       <LeadsTable
         search={search}
-        leads={leads}
+        leads={
+          leadListMode === "in_progress"
+            ? leads.filter(
+                (l) => l.proposal && isProposalInProgress(l.proposal.status),
+              )
+            : leadListMode === "applied"
+              ? leads.filter(
+                  (l) => l.proposal && isProposalSent(l.proposal.status),
+                )
+              : leads
+        }
         checkingWhatsapp={checkingWhatsapp}
         onViewBusiness={openBusinessView}
         onCreateProposal={openCreate}

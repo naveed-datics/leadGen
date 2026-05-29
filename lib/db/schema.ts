@@ -105,7 +105,7 @@ export const proposals = pgTable("proposals", {
     .unique()
     .references(() => leads.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
-  status: text("status").notNull().default("draft"),
+  status: text("status").notNull().default("in_progress"),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()

@@ -1,6 +1,7 @@
 "use client";
 
 import { PhoneCell } from "@/components/PhoneCell";
+import { isProposalSent } from "@/lib/proposal-status";
 import type { LeadWithProposal, SearchDetail } from "@/lib/types";
 
 interface LeadsTableProps {
@@ -162,7 +163,7 @@ function ProposalAction({
     );
   }
 
-  if (lead.proposal.status === "sent") {
+  if (isProposalSent(lead.proposal.status)) {
     return (
       <button
         type="button"
@@ -183,7 +184,7 @@ function ProposalAction({
         onClick={() => onEdit(lead)}
         className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
       >
-        Edit
+        Edit (In progress)
       </button>
     </div>
   );

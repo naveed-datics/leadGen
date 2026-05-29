@@ -13,6 +13,16 @@ type MeResponse =
     }
   | { error: string };
 
+type DashboardStatsResponse =
+  | {
+      stats: {
+        totalLeads: number;
+        proposalsInProgress: number;
+        proposalsSent: number;
+      };
+    }
+  | { error: string };
+
 function CardIcon({
   variant,
 }: {
@@ -160,6 +170,11 @@ export default function DashboardPage() {
   const [role, setRole] = useState<"admin" | "agent" | null>(null);
   const [name, setName] = useState<string>("");
   const [region, setRegion] = useState<string | null>(null);
+  const [stats, setStats] = useState<{
+    totalLeads: number;
+    proposalsInProgress: number;
+    proposalsSent: number;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,6 +192,23 @@ export default function DashboardPage() {
       }
     }
     void run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/dashboard/stats", { cache: "no-store" })
+      .then(async (res) => {
+        const data = (await res.json()) as DashboardStatsResponse;
+        if (cancelled) return;
+        if (!res.ok || "error" in data) return;
+        setStats(data.stats);
+      })
+      .catch(() => {
+        if (!cancelled) setStats(null);
+      });
     return () => {
       cancelled = true;
     };
@@ -204,6 +236,35 @@ export default function DashboardPage() {
             {name?.trim() ? ` Welcome, ${name.trim()}.` : ""}
           </p>
         </header>
+
+        {stats && (
+          <section className="mt-6 grid w-full grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Potential clients (leads)
+              </div>
+              <div className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                {stats.totalLeads}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                In progress
+              </div>
+              <div className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                {stats.proposalsInProgress}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Applied / submitted (sent)
+              </div>
+              <div className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                {stats.proposalsSent}
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="mt-8 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <ActionCard

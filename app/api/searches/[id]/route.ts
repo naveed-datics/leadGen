@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals, searches } from "@/lib/db/schema";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
+import type { ProposalStatus } from "@/lib/proposal-status";
 
 export async function GET(
   _request: Request,
@@ -84,7 +85,7 @@ export async function GET(
           row.proposalId && row.proposalBody
             ? {
                 id: row.proposalId,
-                status: row.proposalStatus as "draft" | "sent",
+                status: row.proposalStatus as ProposalStatus,
                 body: row.proposalBody,
                 sentAt: row.proposalSentAt?.toISOString() ?? null,
               }

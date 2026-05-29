@@ -28,7 +28,7 @@ interface ProposalModalProps {
   proposal: ProposalSummary | null;
   saving: boolean;
   onClose: () => void;
-  onSave: (body: string) => Promise<void>;
+  onSave: (body: string) => Promise<ProposalSummary>;
   onSendWhatsApp: (body: string) => Promise<void>;
 }
 
@@ -52,6 +52,8 @@ export function ProposalModal({
   const [body, setBody] = useState(initialBody);
   const [templateLoading, setTemplateLoading] = useState(false);
   const [senderName, setSenderName] = useState("");
+  const [autoSavingDraft, setAutoSavingDraft] = useState(false);
+  const [autoSavedDraft, setAutoSavedDraft] = useState(false);
   const readOnly = mode === "view";
 
   useEffect(() => {
@@ -80,6 +82,7 @@ export function ProposalModal({
     if (proposal?.body) {
       setBody(proposal.body);
       setTemplateLoading(false);
+      setAutoSavedDraft(true);
       return;
     }
 
@@ -92,6 +95,7 @@ export function ProposalModal({
     let cancelled = false;
     setTemplateLoading(true);
     setBody("");
+    setAutoSavedDraft(false);
 
     fetch(`/api/leads/${leadId}/competitors?includeStats=true&refreshStats=true`)
       .then(async (res) => {
@@ -145,6 +149,32 @@ export function ProposalModal({
     senderName,
   ]);
 
+  useEffect(() => {
+    if (!open) return;
+    if (mode !== "create") return;
+    if (templateLoading) return;
+    if (readOnly) return;
+    if (autoSavedDraft) return;
+    if (!body.trim()) return;
+
+    let cancelled = false;
+    setAutoSavingDraft(true);
+    onSave(body)
+      .then(() => {
+        if (!cancelled) setAutoSavedDraft(true);
+      })
+      .catch(() => {
+        // ignore: user can still manually save
+      })
+      .finally(() => {
+        if (!cancelled) setAutoSavingDraft(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, mode, templateLoading, readOnly, autoSavedDraft, body, onSave]);
+
   if (!open) return null;
 
   const canSend =
@@ -153,10 +183,13 @@ export function ProposalModal({
     hasWhatsapp !== false &&
     Boolean(body.trim()) &&
     !readOnly &&
-    !templateLoading;
+    !templateLoading &&
+    !autoSavingDraft;
 
   const sendDisabledReason = templateLoading
     ? "Loading competitor data for your proposal…"
+    : autoSavingDraft
+      ? "Saving (In progress)…"
     : !greenApiConfigured
       ? "Add GREEN_API_INSTANCE_ID and GREEN_API_TOKEN to .env.local and authorize your WhatsApp at green-api.com"
       : !leadPhone?.trim()
@@ -236,7 +269,7 @@ export function ProposalModal({
                 onClick={() => onSave(body)}
                 className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-900 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
               >
-                {saving ? "Saving…" : "Save draft"}
+                {saving ? "Saving…" : "Save"}
               </button>
               <button
                 type="button"

@@ -2,6 +2,10 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals } from "@/lib/db/schema";
+import {
+  PROPOSAL_STATUS_IN_PROGRESS,
+  type ProposalStatus,
+} from "@/lib/proposal-status";
 
 export async function POST(
   request: Request,
@@ -61,20 +65,28 @@ export async function POST(
     if (existing) {
       [proposal] = await db
         .update(proposals)
-        .set({ body: proposalBody, updatedAt: new Date() })
+        .set({
+          body: proposalBody,
+          status: PROPOSAL_STATUS_IN_PROGRESS,
+          updatedAt: new Date(),
+        })
         .where(eq(proposals.id, existing.id))
         .returning();
     } else {
       [proposal] = await db
         .insert(proposals)
-        .values({ leadId, body: proposalBody, status: "draft" })
+        .values({
+          leadId,
+          body: proposalBody,
+          status: PROPOSAL_STATUS_IN_PROGRESS,
+        })
         .returning();
     }
 
     return NextResponse.json({
       proposal: {
         id: proposal.id,
-        status: proposal.status as "draft" | "sent",
+        status: proposal.status as ProposalStatus,
         body: proposal.body,
         sentAt: proposal.sentAt?.toISOString() ?? null,
       },
