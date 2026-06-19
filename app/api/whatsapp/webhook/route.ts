@@ -7,6 +7,11 @@ import {
   whatsappMessages,
 } from "@/lib/db/schema";
 import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
+import {
+  handleWahaWebhook,
+  isWahaWebhookPayload,
+  type WahaWebhookBody,
+} from "@/lib/integrations/waha-webhook";
 
 function getVerifyToken(): string {
   const token = process.env.WHATSAPP_VERIFY_TOKEN;
@@ -16,8 +21,12 @@ function getVerifyToken(): string {
   return token.trim();
 }
 
-// Meta verification handshake:
-// GET ?hub.mode=subscribe&hub.verify_token=...&hub.challenge=...
+function verifyWebhookSecret(request: Request): boolean {
+  const secret = process.env.WAHA_WEBHOOK_SECRET?.trim();
+  if (!secret) return true;
+  return request.headers.get("x-webhook-secret") === secret;
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const mode = url.searchParams.get("hub.mode");
@@ -61,20 +70,9 @@ type WebhookPayload = {
   }>;
 };
 
-export async function POST(request: Request) {
-  if (!process.env.DATABASE_URL) {
-    return NextResponse.json({ ok: true });
-  }
-
-  let payload: WebhookPayload;
-  try {
-    payload = (await request.json()) as WebhookPayload;
-  } catch {
-    return NextResponse.json({ ok: true });
-  }
-
+async function handleMetaWebhook(payload: WebhookPayload): Promise<void> {
   const entries = payload.entry ?? [];
-  if (entries.length === 0) return NextResponse.json({ ok: true });
+  if (entries.length === 0) return;
 
   const db = getDb();
 
@@ -87,7 +85,6 @@ export async function POST(request: Request) {
       const messages = value?.messages ?? [];
       if (!phoneNumberId || messages.length === 0) continue;
 
-      // Map inbound messages to the agent owning this phone_number_id.
       const [agent] = await db
         .select({ id: users.id })
         .from(users)
@@ -101,12 +98,10 @@ export async function POST(request: Request) {
         const body = msg.text?.body?.trim() ?? "";
         const waMessageId = msg.id?.trim() ?? null;
 
-        // Only store text messages for now.
         if (!from || !body) continue;
 
         const normalizedFrom = normalizePhoneForWhatsApp(from) ?? from;
 
-        // Find/create conversation by agent + customer phone.
         const [existingConv] = await db
           .select({ id: whatsappConversations.id })
           .from(whatsappConversations)
@@ -140,7 +135,6 @@ export async function POST(request: Request) {
           conversationId = created.id;
         }
 
-        // Best-effort dedupe on waMessageId (if provided).
         if (waMessageId) {
           const [dupe] = await db
             .select({ id: whatsappMessages.id })
@@ -161,7 +155,33 @@ export async function POST(request: Request) {
       }
     }
   }
+}
+
+export async function POST(request: Request) {
+  if (!verifyWebhookSecret(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (!process.env.DATABASE_URL) {
+    return NextResponse.json({ ok: true });
+  }
+
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return NextResponse.json({ ok: true });
+  }
+
+  try {
+    if (isWahaWebhookPayload(raw)) {
+      await handleWahaWebhook(raw as WahaWebhookBody);
+    } else {
+      await handleMetaWebhook(raw as WebhookPayload);
+    }
+  } catch {
+    // Always acknowledge webhooks.
+  }
 
   return NextResponse.json({ ok: true });
 }
-

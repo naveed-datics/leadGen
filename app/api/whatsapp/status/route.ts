@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { isGreenApiConfigured } from "@/lib/whatsapp";
+import { isWahaConfigured } from "@/lib/integrations/waha";
 
 export async function GET() {
-  const configured = isGreenApiConfigured();
+  const configured = isWahaConfigured();
   return NextResponse.json({
     checkConfigured: configured,
     sendConfigured: configured,

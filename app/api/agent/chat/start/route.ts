@@ -3,36 +3,18 @@ import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
+import { whatsappConversations, whatsappMessages } from "@/lib/db/schema";
 import {
-  users,
-  whatsappConversations,
-  whatsappMessages,
-} from "@/lib/db/schema";
-import { decryptSecret } from "@/lib/integrations/crypto";
+  checkWahaContactExists,
+  isWahaConfigured,
+  sendWahaTextMessage,
+} from "@/lib/integrations/waha";
 import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
-import {
-  sendWhatsAppCloudTemplateMessage,
-  sendWhatsAppCloudTextMessage,
-  type WhatsAppTemplateBodyParam,
-} from "@/lib/integrations/whatsapp-cloud";
 
-const BodySchema = z
-  .object({
-    phone: z.string().min(1),
-    mode: z.enum(["text", "template"]).default("text"),
-    text: z.string().min(1).optional(),
-    templateName: z.string().min(1).optional(),
-    templateLanguage: z.string().min(1).optional(),
-    templateParams: z.array(z.any()).optional(),
-  })
-  .refine(
-    (v) =>
-      (v.mode === "text" && Boolean(v.text?.trim())) ||
-      (v.mode === "template" &&
-        Boolean(v.templateName?.trim()) &&
-        Boolean(v.templateLanguage?.trim())),
-    { message: "Invalid message mode payload" },
-  );
+const BodySchema = z.object({
+  phone: z.string().min(1),
+  text: z.string().min(1),
+});
 
 export async function POST(request: Request) {
   let agent;
@@ -49,6 +31,16 @@ export async function POST(request: Request) {
   if (!agent.whatsAppEnabled) {
     return NextResponse.json(
       { error: "WhatsApp is disabled by admin" },
+      { status: 403 },
+    );
+  }
+
+  if (!isWahaConfigured()) {
+    return NextResponse.json(
+      {
+        error:
+          "WhatsApp is not configured. Set WAHA_BASE_URL and WAHA_SESSION in .env.local",
+      },
       { status: 403 },
     );
   }
@@ -73,64 +65,30 @@ export async function POST(request: Request) {
     );
   }
 
-  const text = parsed.data.text?.trim() ?? "";
+  const text = parsed.data.text.trim();
+  if (!text) {
+    return NextResponse.json(
+      { error: "Message text is required" },
+      { status: 400 },
+    );
+  }
 
   try {
+    const contact = await checkWahaContactExists(parsed.data.phone);
+    if (!contact.exists || !contact.chatId) {
+      return NextResponse.json(
+        { error: "This number is not on WhatsApp" },
+        { status: 400 },
+      );
+    }
+
+    const { waMessageId } = await sendWahaTextMessage({
+      chatId: contact.chatId,
+      text,
+    });
+
     const db = getDb();
 
-    const [agentRow] = await db
-      .select({
-        waAccessTokenEnc: users.waAccessTokenEnc,
-        waPhoneNumberId: users.waPhoneNumberId,
-      })
-      .from(users)
-      .where(eq(users.id, agent.id))
-      .limit(1);
-
-    const waAccessTokenEnc = agentRow?.waAccessTokenEnc?.trim() ?? "";
-    const waPhoneNumberId = agentRow?.waPhoneNumberId?.trim() ?? "";
-    if (!waAccessTokenEnc || !waPhoneNumberId) {
-      return NextResponse.json(
-        { error: "WhatsApp is not configured. Add credentials in Settings." },
-        { status: 403 },
-      );
-    }
-
-    const waAccessToken = decryptSecret(waAccessTokenEnc);
-
-    let waMessageId: string | null = null;
-    let storedBody = "";
-
-    if (parsed.data.mode === "template") {
-      const params = (parsed.data.templateParams ?? []) as WhatsAppTemplateBodyParam[];
-      const sent = await sendWhatsAppCloudTemplateMessage(
-        { accessToken: waAccessToken, phoneNumberId: waPhoneNumberId },
-        normalizedPhone,
-        {
-          name: parsed.data.templateName!.trim(),
-          languageCode: parsed.data.templateLanguage!.trim(),
-          bodyParams: params,
-        },
-      );
-      waMessageId = sent.waMessageId;
-      storedBody = `[template:${parsed.data.templateName}]`;
-    } else {
-      if (!text) {
-        return NextResponse.json(
-          { error: "Message text is required" },
-          { status: 400 },
-        );
-      }
-      const sent = await sendWhatsAppCloudTextMessage(
-        { accessToken: waAccessToken, phoneNumberId: waPhoneNumberId },
-        normalizedPhone,
-        text,
-      );
-      waMessageId = sent.waMessageId;
-      storedBody = text;
-    }
-
-    // Find or create conversation by agent + customer phone.
     const [existingConv] = await db
       .select({
         id: whatsappConversations.id,
@@ -169,7 +127,7 @@ export async function POST(request: Request) {
     await db.insert(whatsappMessages).values({
       conversationId,
       direction: "outbound",
-      body: storedBody,
+      body: text,
       waMessageId,
       status: "sent",
       createdAt: now,
@@ -182,4 +140,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }
-

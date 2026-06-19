@@ -1,0 +1,96 @@
+import { eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
+import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
+import { getDb } from "@/lib/db/index";
+import { whatsappConversations } from "@/lib/db/schema";
+import {
+  getWahaDashboardUrl,
+  getWahaSession,
+  getWahaSessionInfo,
+  getWahaSessionMe,
+  isWahaConfigured,
+} from "@/lib/integrations/waha";
+import { getWebhookUrlForAgent } from "@/lib/integrations/whatsapp-config";
+
+function phoneFromWahaId(id: string): string {
+  return id.split("@")[0]?.replace(/\D/g, "") || id;
+}
+
+export async function GET() {
+  try {
+    const agent = await requireActiveAgent();
+    const configured = isWahaConfigured();
+    const webhookUrl = getWebhookUrlForAgent(agent.id);
+    const dashboardUrl = getWahaDashboardUrl();
+
+    if (!configured) {
+      return NextResponse.json({
+        configured: false,
+        whatsAppEnabled: agent.whatsAppEnabled,
+        session: getWahaSession(),
+        status: "NOT_CONFIGURED",
+        connected: false,
+        linkedName: null,
+        linkedPhone: null,
+        webhookUrl,
+        dashboardUrl,
+        conversationCount: 0,
+      });
+    }
+
+    let status = "UNKNOWN";
+    let linkedName: string | null = null;
+    let linkedPhone: string | null = null;
+    let connected = false;
+
+    try {
+      const session = await getWahaSessionInfo();
+      status = session.status;
+      connected = status === "WORKING";
+
+      const me = session.me ?? (await getWahaSessionMe().catch(() => null));
+      if (me) {
+        linkedName = me.pushName;
+        linkedPhone = phoneFromWahaId(me.id);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load WAHA session";
+      const isAuth =
+        message.includes("401") || message.toLowerCase().includes("unauthorized");
+      return NextResponse.json(
+        {
+          error: isAuth
+            ? "WAHA rejected the API key. Check WAHA_API_KEY in .env.local and restart the dev server."
+            : message,
+        },
+        { status: 502 },
+      );
+    }
+
+    const db = getDb();
+    const conversations = await db
+      .select({ id: whatsappConversations.id })
+      .from(whatsappConversations)
+      .where(eq(whatsappConversations.agentId, agent.id));
+
+    return NextResponse.json({
+      configured: true,
+      whatsAppEnabled: agent.whatsAppEnabled,
+      session: getWahaSession(),
+      status,
+      connected,
+      linkedName,
+      linkedPhone,
+      webhookUrl,
+      dashboardUrl,
+      conversationCount: conversations.length,
+    });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    return NextResponse.json({ error: message }, { status: 401 });
+  }
+}

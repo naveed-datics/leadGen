@@ -54,6 +54,7 @@ export async function GET(
         proposalStatus: proposals.status,
         proposalBody: proposals.body,
         proposalSentAt: proposals.sentAt,
+        proposalRepliedAt: proposals.repliedAt,
       })
       .from(leads)
       .leftJoin(proposals, eq(proposals.leadId, leads.id))
@@ -88,6 +89,7 @@ export async function GET(
                 status: row.proposalStatus as ProposalStatus,
                 body: row.proposalBody,
                 sentAt: row.proposalSentAt?.toISOString() ?? null,
+                repliedAt: row.proposalRepliedAt?.toISOString() ?? null,
               }
             : null,
       })),

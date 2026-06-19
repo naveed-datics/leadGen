@@ -7,7 +7,7 @@ Find local businesses on Google Maps that have **no website** — useful for lea
 1. Enter an **industry** (e.g. `plumbers`, `coffee shops`) and **location** (e.g. `Austin, TX`).
 2. The app queries [SerpApi Google Maps](https://serpapi.com/maps-local-results) for up to 6 pages (~120 businesses).
 3. Results are filtered to businesses missing a `website` field and saved to **Neon Postgres**.
-4. Open **History** to view past searches, manage leads, and create proposals (stub send: mark as sent in-app).
+4. Open **History** to view past searches, manage leads, and send proposals via WhatsApp (WAHA).
 
 ## Pages
 
@@ -16,6 +16,7 @@ Find local businesses on Google Maps that have **no website** — useful for lea
 | `/` | Search (landing page) |
 | `/searches` | List of past search queries |
 | `/searches/[id]` | Leads for one search + per-lead proposals |
+| `/agent/chat` | WhatsApp inbox (inbound/outbound messages) |
 
 ## Setup
 
@@ -32,18 +33,34 @@ Copy `.env.local.example` to `.env.local` and set:
 ```
 SERPAPI_API_KEY=your_serpapi_key
 DATABASE_URL=postgresql://user:password@host/neondb?sslmode=require
+WAHA_BASE_URL=https://your-waha-host.example.com
+WAHA_SESSION=default
 ```
 
 - **SerpApi**: [serpapi.com](https://serpapi.com/)
 - **Neon**: [neon.tech](https://neon.tech) — paste your connection string as `DATABASE_URL`
+- **WAHA**: [waha.devlike.pro](https://waha.devlike.pro/) — self-hosted WhatsApp HTTP API
 
-### 3. Create database tables
+### 3. WAHA webhook (inbound replies)
+
+Point your WAHA instance at LeadGen so agent chat receives replies:
+
+```bash
+WHATSAPP_HOOK_URL=https://YOUR_LEADGEN_DOMAIN/api/whatsapp/waha/webhook
+WHATSAPP_HOOK_EVENTS=message
+```
+
+Or configure a session webhook in WAHA (`POST /api/sessions/`) with the same URL and `events: ["message"]`.
+
+Optional: set `WAHA_WEBHOOK_SECRET` in LeadGen and send it from WAHA via a custom header `X-Webhook-Secret`.
+
+### 4. Create database tables
 
 ```bash
 npm run db:push
 ```
 
-### 4. Run the dev server
+### 5. Run the dev server
 
 ```bash
 npm run dev
@@ -51,12 +68,13 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Proposals (v1)
+## Proposals & WhatsApp
 
 - **Create proposal** on a lead — pre-filled template, editable body
 - **Save draft** — stored in Neon
-- **Mark as sent** — stub; no email/WhatsApp yet (ready to plug in Resend / WhatsApp later)
+- **Send via WhatsApp** — sends through WAHA (`POST /api/leads/[leadId]/whatsapp/send`)
 - After sent, only **View** is shown (read-only popup)
+- **Agent chat** — inbox at `/agent/chat` for conversation threads
 
 ## API
 
@@ -66,7 +84,10 @@ Open [http://localhost:3000](http://localhost:3000).
 | GET | `/api/searches` | List search history |
 | GET | `/api/searches/[id]` | Search + leads + proposal status |
 | POST | `/api/leads/[leadId]/proposal` | Create/update draft |
-| PATCH | `/api/leads/[leadId]/proposal` | Mark proposal as sent |
+| POST | `/api/leads/[leadId]/whatsapp/send` | Send proposal via WAHA |
+| POST | `/api/whatsapp/check` | Batch-check lead numbers on WhatsApp |
+| GET | `/api/whatsapp/status` | WAHA configuration status |
+| POST | `/api/whatsapp/waha/webhook` | WAHA inbound message webhook |
 
 ## Cost note
 
@@ -77,4 +98,5 @@ Each search uses up to **6 SerpApi credits** (one per results page).
 - [Next.js](https://nextjs.org/) (App Router)
 - [Tailwind CSS](https://tailwindcss.com/)
 - [SerpApi](https://serpapi.com/) Google Maps
+- [WAHA](https://waha.devlike.pro/) WhatsApp HTTP API
 - [Neon](https://neon.tech) Postgres + [Drizzle ORM](https://orm.drizzle.team/)

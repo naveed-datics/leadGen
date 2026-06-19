@@ -19,6 +19,7 @@ type DashboardStatsResponse =
         totalLeads: number;
         proposalsInProgress: number;
         proposalsSent: number;
+        proposalsReplied: number;
       };
     }
   | { error: string };
@@ -174,6 +175,7 @@ export default function DashboardPage() {
     totalLeads: number;
     proposalsInProgress: number;
     proposalsSent: number;
+    proposalsReplied: number;
   } | null>(null);
 
   useEffect(() => {
@@ -238,7 +240,7 @@ export default function DashboardPage() {
         </header>
 
         {stats && (
-          <section className="mt-6 grid w-full grid-cols-1 gap-3 sm:grid-cols-3">
+          <section className="mt-6 grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
               <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 Potential clients (leads)
@@ -261,6 +263,14 @@ export default function DashboardPage() {
               </div>
               <div className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
                 {stats.proposalsSent}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-sky-200 bg-sky-50/50 p-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/20">
+              <div className="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                Needs follow-up (replied)
+              </div>
+              <div className="mt-1 text-2xl font-bold text-sky-900 dark:text-sky-100">
+                {stats.proposalsReplied}
               </div>
             </div>
           </section>

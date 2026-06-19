@@ -75,13 +75,14 @@ export interface SearchSummary {
   createdAt: string;
 }
 
-export type ProposalStatus = "in_progress" | "sent" | "draft";
+export type ProposalStatus = "in_progress" | "sent" | "replied" | "draft";
 
 export interface ProposalSummary {
   id: string;
   status: ProposalStatus;
   body: string;
   sentAt: string | null;
+  repliedAt: string | null;
 }
 
 export interface LeadWithProposal {

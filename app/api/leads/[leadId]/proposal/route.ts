@@ -54,7 +54,7 @@ export async function POST(
       .where(eq(proposals.leadId, leadId))
       .limit(1);
 
-    if (existing?.status === "sent") {
+    if (existing?.status === "sent" || existing?.status === "replied") {
       return NextResponse.json(
         { error: "Cannot edit a sent proposal" },
         { status: 400 },
@@ -89,6 +89,7 @@ export async function POST(
         status: proposal.status as ProposalStatus,
         body: proposal.body,
         sentAt: proposal.sentAt?.toISOString() ?? null,
+        repliedAt: proposal.repliedAt?.toISOString() ?? null,
       },
     });
   } catch (error) {
@@ -160,6 +161,7 @@ export async function PATCH(
         status: "sent" as const,
         body: proposal.body,
         sentAt: proposal.sentAt?.toISOString() ?? null,
+        repliedAt: proposal.repliedAt?.toISOString() ?? null,
       },
     });
   } catch (error) {

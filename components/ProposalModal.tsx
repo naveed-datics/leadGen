@@ -23,7 +23,7 @@ interface ProposalModalProps {
   location: string;
   leadPhone: string | null;
   hasWhatsapp: boolean | null;
-  greenApiConfigured: boolean;
+  whatsappConfigured: boolean;
   initialBody: string;
   proposal: ProposalSummary | null;
   saving: boolean;
@@ -41,7 +41,7 @@ export function ProposalModal({
   location,
   leadPhone,
   hasWhatsapp,
-  greenApiConfigured,
+  whatsappConfigured,
   initialBody,
   proposal,
   saving,
@@ -178,7 +178,7 @@ export function ProposalModal({
   if (!open) return null;
 
   const canSend =
-    greenApiConfigured &&
+    whatsappConfigured &&
     Boolean(leadPhone?.trim()) &&
     hasWhatsapp !== false &&
     Boolean(body.trim()) &&
@@ -190,8 +190,8 @@ export function ProposalModal({
     ? "Loading competitor data for your proposal…"
     : autoSavingDraft
       ? "Saving (In progress)…"
-    : !greenApiConfigured
-      ? "Add GREEN_API_INSTANCE_ID and GREEN_API_TOKEN to .env.local and authorize your WhatsApp at green-api.com"
+    : !whatsappConfigured
+      ? "Set WAHA_BASE_URL and WAHA_SESSION in .env.local and pair your WhatsApp session in WAHA"
       : !leadPhone?.trim()
         ? "This lead has no phone number"
         : hasWhatsapp === false

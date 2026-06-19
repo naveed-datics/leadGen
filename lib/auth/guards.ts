@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { getDb } from "@/lib/db/index";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { isWahaConfigured } from "@/lib/integrations/waha";
 import type { AuthRole } from "./jwt";
 import { authCookieName, verifyAuthToken } from "./jwt";
 
@@ -50,8 +51,6 @@ export async function requireAuth(): Promise<CurrentUser> {
       searchEnabled: users.searchEnabled,
       whatsAppEnabled: users.whatsAppEnabled,
       serpApiKeyEnc: users.serpApiKeyEnc,
-      waAccessTokenEnc: users.waAccessTokenEnc,
-      waPhoneNumberId: users.waPhoneNumberId,
     })
     .from(users)
     .where(eq(users.id, payload.sub));
@@ -71,7 +70,7 @@ export async function requireAuth(): Promise<CurrentUser> {
     searchEnabled: user.searchEnabled,
     whatsAppEnabled: user.whatsAppEnabled,
     serpApiKeyConfigured: Boolean(user.serpApiKeyEnc?.trim()),
-    waConfigured: Boolean(user.waAccessTokenEnc?.trim() && user.waPhoneNumberId?.trim()),
+    waConfigured: isWahaConfigured(),
   };
 }
 

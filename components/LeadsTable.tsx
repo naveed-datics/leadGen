@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { PhoneCell } from "@/components/PhoneCell";
-import { isProposalSent } from "@/lib/proposal-status";
+import { isProposalReplied, isProposalSent } from "@/lib/proposal-status";
 import type { LeadWithProposal, SearchDetail } from "@/lib/types";
 
 interface LeadsTableProps {
@@ -67,6 +68,11 @@ export function LeadsTable({
                       {lead.title}
                     </p>
                     <p className="text-xs text-zinc-500">{lead.address ?? "—"}</p>
+                    {lead.proposal && isProposalReplied(lead.proposal.status) && (
+                      <p className="mt-1 text-xs font-medium text-sky-700 dark:text-sky-300">
+                        Replied {formatRelativeTime(lead.proposal.repliedAt)}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                     <PhoneCell
@@ -97,6 +103,14 @@ export function LeadsTable({
                         onEdit={onEditProposal}
                         onView={onViewProposal}
                       />
+                      {lead.proposal && isProposalReplied(lead.proposal.status) && (
+                        <Link
+                          href="/agent/chat"
+                          className="inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950/40"
+                        >
+                          View chat
+                        </Link>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -108,6 +122,11 @@ export function LeadsTable({
           {leads.map((lead) => (
             <li key={lead.id} className="space-y-2 px-4 py-4">
               <p className="font-medium">{lead.title}</p>
+              {lead.proposal && isProposalReplied(lead.proposal.status) && (
+                <p className="text-xs font-medium text-sky-700 dark:text-sky-300">
+                  Replied {formatRelativeTime(lead.proposal.repliedAt)}
+                </p>
+              )}
               <PhoneCell
                 phone={lead.phone}
                 hasWhatsapp={lead.hasWhatsapp}
@@ -129,6 +148,14 @@ export function LeadsTable({
                   onEdit={onEditProposal}
                   onView={onViewProposal}
                 />
+                {lead.proposal && isProposalReplied(lead.proposal.status) && (
+                  <Link
+                    href="/agent/chat"
+                    className="rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 dark:border-sky-800 dark:text-sky-200"
+                  >
+                    View chat
+                  </Link>
+                )}
               </div>
             </li>
           ))}
@@ -163,6 +190,20 @@ function ProposalAction({
     );
   }
 
+  if (isProposalReplied(lead.proposal.status)) {
+    return (
+      <button
+        type="button"
+        onClick={() => onView(lead)}
+        className="inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200"
+        title="View proposal"
+      >
+        <EyeIcon />
+        View proposal
+      </button>
+    );
+  }
+
   if (isProposalSent(lead.proposal.status)) {
     return (
       <button
@@ -188,6 +229,21 @@ function ProposalAction({
       </button>
     </div>
   );
+}
+
+function formatRelativeTime(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const diffMs = Date.now() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
 }
 
 function formatRating(lead: LeadWithProposal): string {

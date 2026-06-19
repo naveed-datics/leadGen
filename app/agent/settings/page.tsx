@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { WhatsAppConnectionCard } from "@/components/WhatsAppConnectionCard";
 
 type AgentSettings = {
   id: string;
@@ -21,10 +22,6 @@ export default function AgentSettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [serpApiKey, setSerpApiKey] = useState("");
-  const [waAccessToken, setWaAccessToken] = useState("");
-  const [waPhoneNumberId, setWaPhoneNumberId] = useState("");
-  const [waBusinessAccountId, setWaBusinessAccountId] = useState("");
-  const [waAppId, setWaAppId] = useState("");
 
   async function load() {
     setLoading(true);
@@ -55,19 +52,12 @@ export default function AgentSettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           serpApiKey: serpApiKey.trim() ? serpApiKey : undefined,
-          waAccessToken: waAccessToken.trim() ? waAccessToken : undefined,
-          waPhoneNumberId: waPhoneNumberId.trim() ? waPhoneNumberId : undefined,
-          waBusinessAccountId: waBusinessAccountId.trim()
-            ? waBusinessAccountId
-            : undefined,
-          waAppId: waAppId.trim() ? waAppId : undefined,
         }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed to save settings");
       setSuccess("Saved.");
       setSerpApiKey("");
-      setWaAccessToken("");
       await load();
     } catch (e2) {
       setError(e2 instanceof Error ? e2.message : "Failed to save settings");
@@ -104,7 +94,7 @@ export default function AgentSettingsPage() {
           </div>
           <div className="mt-3 text-xs text-zinc-600 dark:text-zinc-400">
             SerpApi key: {agent.serpApiKeyConfigured ? "Configured" : "Missing"} ·
-            WhatsApp creds: {agent.waConfigured ? "Configured" : "Missing"}
+            WAHA: {agent.waConfigured ? "Configured server-side" : "Not configured"}
           </div>
         </div>
       ) : (
@@ -128,6 +118,8 @@ export default function AgentSettingsPage() {
         </div>
       )}
 
+      <WhatsAppConnectionCard />
+
       <form onSubmit={save} className="mt-6 space-y-6">
         <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
           <h2 className="text-sm font-semibold">SerpApi</h2>
@@ -142,61 +134,6 @@ export default function AgentSettingsPage() {
               placeholder={agent?.serpApiKeyConfigured ? "•••••••• (set a new key)" : "paste key"}
             />
           </label>
-        </section>
-
-        <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold">WhatsApp Cloud API (Meta)</h2>
-          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-            You need at least an access token and phone number id.
-          </p>
-
-          <label className="mt-3 block">
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-              Access token
-            </span>
-            <input
-              value={waAccessToken}
-              onChange={(e) => setWaAccessToken(e.target.value)}
-              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-              placeholder={agent?.waConfigured ? "•••••••• (set a new token)" : "paste token"}
-            />
-          </label>
-
-          <label className="mt-3 block">
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-              Phone number id
-            </span>
-            <input
-              value={waPhoneNumberId}
-              onChange={(e) => setWaPhoneNumberId(e.target.value)}
-              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-              placeholder="e.g. 1234567890"
-            />
-          </label>
-
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                Business account id (optional)
-              </span>
-              <input
-                value={waBusinessAccountId}
-                onChange={(e) => setWaBusinessAccountId(e.target.value)}
-                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                App id (optional)
-              </span>
-              <input
-                value={waAppId}
-                onChange={(e) => setWaAppId(e.target.value)}
-                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-              />
-            </label>
-          </div>
         </section>
 
         <button

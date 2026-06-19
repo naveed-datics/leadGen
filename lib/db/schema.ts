@@ -107,6 +107,7 @@ export const proposals = pgTable("proposals", {
   body: text("body").notNull(),
   status: text("status").notNull().default("in_progress"),
   sentAt: timestamp("sent_at", { withTimezone: true }),
+  repliedAt: timestamp("replied_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

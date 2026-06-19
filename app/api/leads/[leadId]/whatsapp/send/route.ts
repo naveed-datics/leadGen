@@ -1,16 +1,16 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals } from "@/lib/db/schema";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
+import { whatsappConversations, whatsappMessages } from "@/lib/db/schema";
 import {
-  users,
-  whatsappConversations,
-  whatsappMessages,
-} from "@/lib/db/schema";
-import { decryptSecret } from "@/lib/integrations/crypto";
+  checkWahaContactExists,
+  isWahaConfigured,
+  sendWahaTextMessage,
+} from "@/lib/integrations/waha";
+import { getWhatsAppConfig } from "@/lib/integrations/whatsapp-config";
 import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
-import { sendWhatsAppCloudTextMessage } from "@/lib/integrations/whatsapp-cloud";
 
 export async function POST(
   request: Request,
@@ -43,6 +43,16 @@ export async function POST(
     );
   }
 
+  if (!isWahaConfigured()) {
+    return NextResponse.json(
+      {
+        error:
+          "WhatsApp is not configured. Set WAHA_BASE_URL and WAHA_SESSION in .env.local",
+      },
+      { status: 403 },
+    );
+  }
+
   let body: { body?: string };
   try {
     body = await request.json();
@@ -60,26 +70,7 @@ export async function POST(
 
   try {
     const db = getDb();
-
-    const [agentRow] = await db
-      .select({
-        waAccessTokenEnc: users.waAccessTokenEnc,
-        waPhoneNumberId: users.waPhoneNumberId,
-      })
-      .from(users)
-      .where(eq(users.id, agent.id))
-      .limit(1);
-
-    const waAccessTokenEnc = agentRow?.waAccessTokenEnc?.trim() ?? "";
-    const waPhoneNumberId = agentRow?.waPhoneNumberId?.trim() ?? "";
-    if (!waAccessTokenEnc || !waPhoneNumberId) {
-      return NextResponse.json(
-        { error: "WhatsApp is not configured. Add credentials in Settings." },
-        { status: 403 },
-      );
-    }
-
-    const waAccessToken = decryptSecret(waAccessTokenEnc);
+    const config = getWhatsAppConfig();
 
     const [lead] = await db
       .select({
@@ -111,7 +102,17 @@ export async function POST(
       );
     }
 
-    if (lead.hasWhatsapp === false) {
+    if (config.qualificationEnabled) {
+      if (lead.hasWhatsapp !== true) {
+        return NextResponse.json(
+          {
+            error:
+              "This number is not qualified for WhatsApp. Wait for the WhatsApp check to finish.",
+          },
+          { status: 400 },
+        );
+      }
+    } else if (lead.hasWhatsapp === false) {
       return NextResponse.json(
         {
           error:
@@ -121,26 +122,86 @@ export async function POST(
       );
     }
 
+    if (config.leadDedupeSameDay) {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const [sentToday] = await db
+        .select({ id: whatsappMessages.id })
+        .from(whatsappMessages)
+        .innerJoin(
+          whatsappConversations,
+          eq(whatsappMessages.conversationId, whatsappConversations.id),
+        )
+        .where(
+          and(
+            eq(whatsappConversations.customerPhone, normalizedPhone),
+            eq(whatsappMessages.direction, "outbound"),
+            gte(whatsappMessages.createdAt, startOfDay),
+          ),
+        )
+        .limit(1);
+      if (sentToday) {
+        return NextResponse.json(
+          { error: "A WhatsApp message was already sent to this number today." },
+          { status: 429 },
+        );
+      }
+    }
+
+    if (config.promptThrottleMs > 0) {
+      const since = new Date(Date.now() - config.promptThrottleMs);
+      const [recentSend] = await db
+        .select({ id: whatsappMessages.id })
+        .from(whatsappMessages)
+        .innerJoin(
+          whatsappConversations,
+          eq(whatsappMessages.conversationId, whatsappConversations.id),
+        )
+        .where(
+          and(
+            eq(whatsappConversations.customerPhone, normalizedPhone),
+            eq(whatsappMessages.direction, "outbound"),
+            gte(whatsappMessages.createdAt, since),
+          ),
+        )
+        .orderBy(desc(whatsappMessages.createdAt))
+        .limit(1);
+      if (recentSend) {
+        return NextResponse.json(
+          {
+            error: `Please wait before sending another message to this number (${Math.round(config.promptThrottleMs / 1000)}s throttle).`,
+          },
+          { status: 429 },
+        );
+      }
+    }
+
     const [existing] = await db
       .select()
       .from(proposals)
       .where(eq(proposals.leadId, leadId))
       .limit(1);
 
-    if (existing?.status === "sent") {
+    if (existing?.status === "sent" || existing?.status === "replied") {
       return NextResponse.json(
         { error: "Proposal was already sent via WhatsApp" },
         { status: 400 },
       );
     }
 
-    const { waMessageId } = await sendWhatsAppCloudTextMessage(
-      { accessToken: waAccessToken, phoneNumberId: waPhoneNumberId },
-      normalizedPhone,
-      proposalBody,
-    );
+    const contact = await checkWahaContactExists(lead.phone);
+    if (!contact.exists || !contact.chatId) {
+      return NextResponse.json(
+        { error: "This number is not on WhatsApp" },
+        { status: 400 },
+      );
+    }
 
-    // Store into agent chat inbox.
+    const { waMessageId } = await sendWahaTextMessage({
+      chatId: contact.chatId,
+      text: proposalBody,
+    });
+
     let conversationId: string;
     const [existingConv] = await db
       .select({ id: whatsappConversations.id })
@@ -207,6 +268,7 @@ export async function POST(
         status: "sent" as const,
         body: proposal.body,
         sentAt: proposal.sentAt?.toISOString() ?? null,
+        repliedAt: proposal.repliedAt?.toISOString() ?? null,
       },
       whatsapp: { sent: true },
     });

@@ -6,11 +6,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BusinessDetailModal } from "@/components/BusinessDetailModal";
 import { LeadsTable } from "@/components/LeadsTable";
 import { ProposalModal } from "@/components/ProposalModal";
-import { isProposalInProgress, isProposalSent } from "@/lib/proposal-status";
+import { isProposalInProgress, isProposalReplied, isProposalSent } from "@/lib/proposal-status";
 import type { LeadWithProposal, ProposalSummary, SearchDetail } from "@/lib/types";
 
 type ModalMode = "create" | "edit" | "view";
-type LeadListMode = "all" | "in_progress" | "applied";
+type LeadListMode = "all" | "in_progress" | "applied" | "replied";
 
 export default function SearchDetailPage() {
   const params = useParams();
@@ -28,9 +28,17 @@ export default function SearchDetailPage() {
   const [businessLeadId, setBusinessLeadId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [checkingWhatsapp, setCheckingWhatsapp] = useState(false);
-  const [greenApiConfigured, setGreenApiConfigured] = useState(false);
+  const [whatsappConfigured, setWhatsappConfigured] = useState(false);
   const whatsappCheckStarted = useRef(false);
   const [leadListMode, setLeadListMode] = useState<LeadListMode>("all");
+
+  const repliedLeads = leads
+    .filter((l) => l.proposal && isProposalReplied(l.proposal.status))
+    .sort((a, b) => {
+      const aTime = a.proposal?.repliedAt ? Date.parse(a.proposal.repliedAt) : 0;
+      const bTime = b.proposal?.repliedAt ? Date.parse(b.proposal.repliedAt) : 0;
+      return bTime - aTime;
+    });
 
   const loadSearch = useCallback(async () => {
     setLoading(true);
@@ -60,9 +68,9 @@ export default function SearchDetailPage() {
     fetch("/api/whatsapp/status")
       .then((res) => res.json())
       .then((data) => {
-        setGreenApiConfigured(Boolean(data.sendConfigured));
+        setWhatsappConfigured(Boolean(data.sendConfigured));
       })
-      .catch(() => setGreenApiConfigured(false));
+      .catch(() => setWhatsappConfigured(false));
   }, []);
 
   const checkWhatsapp = useCallback(async (searchId: string) => {
@@ -267,6 +275,18 @@ export default function SearchDetailPage() {
           {leads.filter((l) => l.proposal && isProposalSent(l.proposal.status)).length}
           )
         </button>
+        <button
+          type="button"
+          onClick={() => setLeadListMode("replied")}
+          className={[
+            "rounded-xl border px-3 py-1.5 text-sm font-medium transition",
+            leadListMode === "replied"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100"
+              : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900",
+          ].join(" ")}
+        >
+          Replied ({repliedLeads.length})
+        </button>
       </div>
 
       <LeadsTable
@@ -280,7 +300,9 @@ export default function SearchDetailPage() {
               ? leads.filter(
                   (l) => l.proposal && isProposalSent(l.proposal.status),
                 )
-              : leads
+              : leadListMode === "replied"
+                ? repliedLeads
+                : leads
         }
         checkingWhatsapp={checkingWhatsapp}
         onViewBusiness={openBusinessView}
@@ -308,7 +330,7 @@ export default function SearchDetailPage() {
           location={search.location}
           leadPhone={activeLead.phone}
           hasWhatsapp={activeLead.hasWhatsapp}
-          greenApiConfigured={greenApiConfigured}
+          whatsappConfigured={whatsappConfigured}
           initialBody={getInitialBody()}
           proposal={activeLead.proposal}
           saving={saving}

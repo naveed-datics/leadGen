@@ -378,7 +378,7 @@ export default function AdminAgentsPage() {
                   </td>
                   <td className="px-4 py-3 text-xs">
                     <div>SerpApi: {a.serpApiKeyConfigured ? "OK" : "Missing"}</div>
-                    <div>WA: {a.waConfigured ? "OK" : "Missing"}</div>
+                    <div>WAHA: {a.waConfigured ? "OK" : "Missing"}</div>
                   </td>
                 </tr>
               ))

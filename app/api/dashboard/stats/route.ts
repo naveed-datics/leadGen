@@ -24,6 +24,7 @@ export async function GET() {
         totalLeads: sql<number>`count(${leads.id})`,
         proposalsInProgress: sql<number>`sum(case when ${proposals.status} in ('in_progress', 'draft') then 1 else 0 end)`,
         proposalsSent: sql<number>`sum(case when ${proposals.status} = 'sent' then 1 else 0 end)`,
+        proposalsReplied: sql<number>`sum(case when ${proposals.status} = 'replied' then 1 else 0 end)`,
       })
       .from(leads)
       .innerJoin(searches, eq(leads.searchId, searches.id))
@@ -36,6 +37,7 @@ export async function GET() {
         totalLeads: Number(row?.totalLeads ?? 0),
         proposalsInProgress: Number(row?.proposalsInProgress ?? 0),
         proposalsSent: Number(row?.proposalsSent ?? 0),
+        proposalsReplied: Number(row?.proposalsReplied ?? 0),
       },
     });
   } catch (error) {

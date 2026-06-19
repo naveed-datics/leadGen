@@ -29,12 +29,6 @@ export default function AgentChatPage() {
   const [startOpen, setStartOpen] = useState(false);
   const [startPhone, setStartPhone] = useState("");
   const [startText, setStartText] = useState("");
-  const [startMode, setStartMode] = useState<"text" | "template">("text");
-  const [templateName, setTemplateName] = useState("");
-  const [templateLanguage, setTemplateLanguage] = useState("en_US");
-  const [templateParamsJson, setTemplateParamsJson] = useState(
-    "[]",
-  );
   const [starting, setStarting] = useState(false);
 
   const loadConversations = useCallback(async () => {
@@ -91,25 +85,12 @@ export default function AgentChatPage() {
     setSuccess(null);
     setStarting(true);
     try {
-      let templateParams: unknown = undefined;
-      if (startMode === "template") {
-        try {
-          templateParams = JSON.parse(templateParamsJson || "[]");
-        } catch {
-          throw new Error("Template params must be valid JSON (array).");
-        }
-      }
-
       const res = await fetch("/api/agent/chat/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: startPhone,
-          mode: startMode,
-          text: startMode === "text" ? startText : undefined,
-          templateName: startMode === "template" ? templateName : undefined,
-          templateLanguage: startMode === "template" ? templateLanguage : undefined,
-          templateParams: startMode === "template" ? templateParams : undefined,
+          text: startText,
         }),
       });
       const data = (await res.json()) as { ok?: boolean; conversationId?: string; error?: string };
@@ -117,7 +98,6 @@ export default function AgentChatPage() {
       setSuccess("Message sent.");
       setStartPhone("");
       setStartText("");
-      setTemplateName("");
       setStartOpen(false);
       await loadConversations();
       if (data.conversationId) setActiveId(data.conversationId);
@@ -180,76 +160,19 @@ export default function AgentChatPage() {
                 required
               />
             </label>
-            <label className="block sm:col-span-1">
+            <label className="block sm:col-span-2">
               <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                Mode
+                Message
               </span>
-              <select
-                value={startMode}
-                onChange={(e) =>
-                  setStartMode(e.target.value as "text" | "template")
-                }
+              <textarea
+                value={startText}
+                onChange={(e) => setStartText(e.target.value)}
                 className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-              >
-                <option value="text">Text</option>
-                <option value="template">Template</option>
-              </select>
+                placeholder="Type your message…"
+                rows={3}
+                required
+              />
             </label>
-
-            {startMode === "text" ? (
-              <label className="block sm:col-span-2">
-                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                  Message
-                </span>
-                <textarea
-                  value={startText}
-                  onChange={(e) => setStartText(e.target.value)}
-                  className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                  placeholder="Type your message…"
-                  rows={3}
-                  required
-                />
-              </label>
-            ) : (
-              <>
-                <label className="block sm:col-span-1">
-                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Template name
-                  </span>
-                  <input
-                    value={templateName}
-                    onChange={(e) => setTemplateName(e.target.value)}
-                    className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                    placeholder="e.g. jaspers_market_order_confirmation_v1"
-                    required
-                  />
-                </label>
-                <label className="block sm:col-span-1">
-                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Language
-                  </span>
-                  <input
-                    value={templateLanguage}
-                    onChange={(e) => setTemplateLanguage(e.target.value)}
-                    className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                    placeholder="en_US"
-                    required
-                  />
-                </label>
-                <label className="block sm:col-span-2">
-                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Body parameters (JSON array, optional)
-                  </span>
-                  <textarea
-                    value={templateParamsJson}
-                    onChange={(e) => setTemplateParamsJson(e.target.value)}
-                    className="mt-1 w-full rounded-md border px-3 py-2 font-mono text-xs"
-                    rows={4}
-                    placeholder='[]'
-                  />
-                </label>
-              </>
-            )}
             <div className="sm:col-span-2 flex gap-2">
               <button
                 type="submit"
@@ -268,7 +191,7 @@ export default function AgentChatPage() {
             </div>
           </form>
           <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
-            Note: With Meta test numbers, you can only message allowed test recipients.
+            Messages are sent through your WAHA session configured on the server.
           </p>
         </div>
       )}

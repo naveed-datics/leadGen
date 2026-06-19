@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db/index";
 import { users } from "@/lib/db/schema";
 import { AuthError, requireRole } from "@/lib/auth/guards";
 import { normalizeCountryKey } from "@/lib/geo/cities";
+import { isWahaConfigured } from "@/lib/integrations/waha";
 
 const PatchSchema = z
   .object({
@@ -60,7 +61,7 @@ export async function GET(
         searchEnabled: row.searchEnabled,
         whatsAppEnabled: row.whatsAppEnabled,
         serpApiKeyConfigured: Boolean(row.serpApiKeyEnc?.trim()),
-        waConfigured: Boolean(row.waAccessTokenEnc?.trim() && row.waPhoneNumberId?.trim()),
+        waConfigured: isWahaConfigured(),
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
       },

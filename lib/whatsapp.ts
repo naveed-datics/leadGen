@@ -24,31 +24,19 @@ export async function checkWhatsAppExists(phone: string): Promise<boolean> {
   const normalized = normalizePhoneForWhatsApp(phone);
   if (!normalized) return false;
 
-  if (process.env.GREEN_API_INSTANCE_ID && process.env.GREEN_API_TOKEN) {
-    return checkViaGreenApi(normalized);
+  const { isWahaConfigured, checkWahaContactExists } = await import(
+    "@/lib/integrations/waha"
+  );
+  if (isWahaConfigured()) {
+    try {
+      const result = await checkWahaContactExists(phone);
+      return result.exists;
+    } catch {
+      return checkViaWhatsAppWeb(normalized);
+    }
   }
 
   return checkViaWhatsAppWeb(normalized);
-}
-
-async function checkViaGreenApi(normalizedPhone: string): Promise<boolean> {
-  const instanceId = process.env.GREEN_API_INSTANCE_ID!;
-  const token = process.env.GREEN_API_TOKEN!;
-  const url = `https://7105.api.greenapi.com/waInstance${instanceId}/checkWhatsapp/${token}`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phoneNumber: Number(normalizedPhone) }),
-    signal: AbortSignal.timeout(10_000),
-  });
-
-  if (!response.ok) {
-    return checkViaWhatsAppWeb(normalizedPhone);
-  }
-
-  const data = (await response.json()) as { existsWhatsapp?: boolean };
-  return Boolean(data.existsWhatsapp);
 }
 
 async function checkViaWhatsAppWeb(normalizedPhone: string): Promise<boolean> {
@@ -73,15 +61,6 @@ export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const GREEN_API_BASE = "https://7105.api.greenapi.com";
-
-export function isGreenApiConfigured(): boolean {
-  return Boolean(
-    process.env.GREEN_API_INSTANCE_ID?.trim() &&
-      process.env.GREEN_API_TOKEN?.trim(),
-  );
-}
-
 export function buildChatId(phone: string): string | null {
   const normalized = normalizePhoneForWhatsApp(phone);
   if (!normalized) return null;
@@ -92,37 +71,21 @@ export async function sendWhatsAppMessage(
   phone: string,
   message: string,
 ): Promise<void> {
-  if (!isGreenApiConfigured()) {
+  const { isWahaConfigured, checkWahaContactExists, sendWahaTextMessage } =
+    await import("@/lib/integrations/waha");
+
+  if (!isWahaConfigured()) {
     throw new Error(
-      "Green API is not configured. Add GREEN_API_INSTANCE_ID and GREEN_API_TOKEN to .env.local",
+      "WAHA is not configured. Add WAHA_BASE_URL to .env.local",
     );
   }
 
-  const chatId = buildChatId(phone);
-  if (!chatId) {
-    throw new Error("Invalid phone number for WhatsApp");
+  const { exists, chatId } = await checkWahaContactExists(phone);
+  if (!exists || !chatId) {
+    throw new Error("This number is not on WhatsApp");
   }
 
-  const instanceId = process.env.GREEN_API_INSTANCE_ID!.trim();
-  const token = process.env.GREEN_API_TOKEN!.trim();
-  const url = `${GREEN_API_BASE}/waInstance${instanceId}/sendMessage/${token}`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chatId, message }),
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(
-      `WhatsApp send failed (${response.status}): ${text || response.statusText}`,
-    );
-  }
-
-  const data = (await response.json()) as { idMessage?: string; message?: string };
-  if (data.message && !data.idMessage) {
-    throw new Error(data.message);
-  }
+  await sendWahaTextMessage({ chatId, text: message });
 }
+
+export { isWahaConfigured } from "@/lib/integrations/waha";

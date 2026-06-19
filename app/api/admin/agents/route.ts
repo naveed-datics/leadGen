@@ -6,6 +6,7 @@ import { users } from "@/lib/db/schema";
 import { AuthError, requireRole } from "@/lib/auth/guards";
 import { hashPassword } from "@/lib/auth/password";
 import { normalizeCountryKey } from "@/lib/geo/cities";
+import { isWahaConfigured } from "@/lib/integrations/waha";
 
 const CreateAgentSchema = z.object({
   name: z.string().min(1),
@@ -155,7 +156,7 @@ export async function GET(request: Request) {
         searchEnabled: r.searchEnabled,
         whatsAppEnabled: r.whatsAppEnabled,
         serpApiKeyConfigured: Boolean(r.serpApiKeyEnc?.trim()),
-        waConfigured: Boolean(r.waAccessTokenEnc?.trim() && r.waPhoneNumberId?.trim()),
+        waConfigured: isWahaConfigured(),
         createdAt: r.createdAt.toISOString(),
         updatedAt: r.updatedAt.toISOString(),
       })),
