@@ -28,8 +28,8 @@ export async function POST(request: Request) {
 
   try {
     await handleWahaWebhook(body);
-  } catch {
-    // Always acknowledge WAHA webhooks to avoid retries storm.
+  } catch (error) {
+    console.error("[waha-webhook] handler failed:", error);
   }
 
   return NextResponse.json({ ok: true });

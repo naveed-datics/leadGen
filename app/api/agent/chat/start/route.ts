@@ -14,6 +14,8 @@ import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
 const BodySchema = z.object({
   phone: z.string().min(1),
   text: z.string().min(1),
+  businessName: z.string().optional(),
+  industry: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -73,6 +75,9 @@ export async function POST(request: Request) {
     );
   }
 
+  const businessName = parsed.data.businessName?.trim() || normalizedPhone;
+  const industry = parsed.data.industry?.trim() || null;
+
   try {
     const contact = await checkWahaContactExists(parsed.data.phone);
     if (!contact.exists || !contact.chatId) {
@@ -109,7 +114,11 @@ export async function POST(request: Request) {
       conversationId = existingConv.id;
       await db
         .update(whatsappConversations)
-        .set({ lastMessageAt: now })
+        .set({
+          lastMessageAt: now,
+          displayName: businessName,
+          industry,
+        })
         .where(eq(whatsappConversations.id, conversationId));
     } else {
       const [created] = await db
@@ -117,7 +126,8 @@ export async function POST(request: Request) {
         .values({
           agentId: agent.id,
           customerPhone: normalizedPhone,
-          displayName: normalizedPhone,
+          displayName: businessName,
+          industry,
           lastMessageAt: now,
         })
         .returning({ id: whatsappConversations.id });

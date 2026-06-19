@@ -285,8 +285,14 @@ export default function DashboardPage() {
           />
           <ActionCard
             href="/searches"
+            title="Opportunities"
+            description="Search history and outreach prospects."
+            icon={<CardIcon variant="history" />}
+          />
+          <ActionCard
+            href="/leads"
             title="Leads"
-            description="View history and saved leads."
+            description="WhatsApp replies ready for follow-up."
             icon={<CardIcon variant="history" />}
           />
 

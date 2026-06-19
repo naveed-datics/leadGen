@@ -144,16 +144,69 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function buildSessionConfig(webhookUrl?: string) {
+type WahaWebhookConfig = {
+  url: string;
+  events: string[];
+  customHeaders?: Array<{ name: string; value: string }>;
+};
+
+type WahaSessionConfig = {
+  webhooks?: WahaWebhookConfig[];
+};
+
+function buildSessionConfig(webhookUrl?: string): WahaSessionConfig | undefined {
   if (!webhookUrl) return undefined;
-  return {
-    webhooks: [
-      {
-        url: webhookUrl,
-        events: ["message"],
-      },
-    ],
+
+  const webhook: WahaWebhookConfig = {
+    url: webhookUrl,
+    events: ["message"],
   };
+
+  const secret = process.env.WAHA_WEBHOOK_SECRET?.trim();
+  if (secret) {
+    webhook.customHeaders = [{ name: "X-Webhook-Secret", value: secret }];
+  }
+
+  return { webhooks: [webhook] };
+}
+
+export async function syncWahaSessionWebhook(webhookUrl?: string): Promise<void> {
+  const config = buildSessionConfig(webhookUrl);
+  if (!config) {
+    throw new Error(
+      "Webhook URL is not configured. Set WAHA_WEBHOOK_BASE_URL or WHATSAPP_HOOK_URL in .env.local",
+    );
+  }
+
+  const session = getWahaSession();
+  const response = await wahaFetch(`/api/sessions/${encodeURIComponent(session)}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      name: session,
+      config,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(
+      `Failed to register WAHA webhooks (${response.status}): ${text || response.statusText}`,
+    );
+  }
+}
+
+export async function getWahaSessionWebhookUrls(): Promise<string[]> {
+  const session = getWahaSession();
+  const response = await wahaFetch(`/api/sessions/${encodeURIComponent(session)}`);
+  if (!response.ok) return [];
+
+  const data = (await response.json()) as {
+    config?: { webhooks?: Array<{ url?: string }> };
+  };
+
+  return (data.config?.webhooks ?? [])
+    .map((hook) => hook.url?.trim() ?? "")
+    .filter(Boolean);
 }
 
 export function getWahaDashboardUrl(): string | null {
@@ -266,6 +319,9 @@ export async function prepareWahaSessionForQr(
     }
   } else if (lookup.ok) {
     const current = (await lookup.json()) as WahaSessionResponse;
+    if (webhookUrl) {
+      await syncWahaSessionWebhook(webhookUrl);
+    }
     if (current.status === "STOPPED" || current.status === "FAILED") {
       const start = await wahaFetch(
         `/api/sessions/${encodeURIComponent(session)}/start`,
@@ -331,6 +387,10 @@ export async function ensureWahaSessionStarted(webhookUrl?: string): Promise<voi
       }),
     });
     return;
+  }
+
+  if (webhookUrl) {
+    await syncWahaSessionWebhook(webhookUrl);
   }
 
   const info = lookup.ok

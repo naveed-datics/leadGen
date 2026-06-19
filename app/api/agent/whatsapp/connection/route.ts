@@ -8,9 +8,13 @@ import {
   getWahaSession,
   getWahaSessionInfo,
   getWahaSessionMe,
+  getWahaSessionWebhookUrls,
   isWahaConfigured,
 } from "@/lib/integrations/waha";
-import { getWebhookUrlForAgent } from "@/lib/integrations/whatsapp-config";
+import {
+  getWebhookUrlForAgent,
+  isWebhookUrlUnreachableFromWaha,
+} from "@/lib/integrations/whatsapp-config";
 
 function phoneFromWahaId(id: string): string {
   return id.split("@")[0]?.replace(/\D/g, "") || id;
@@ -74,6 +78,26 @@ export async function GET() {
       .from(whatsappConversations)
       .where(eq(whatsappConversations.agentId, agent.id));
 
+    let webhookConfigured = false;
+    let webhookReachabilityWarning: string | null = null;
+
+    if (webhookUrl) {
+      if (isWebhookUrlUnreachableFromWaha(webhookUrl, process.env.WAHA_BASE_URL ?? "")) {
+        webhookReachabilityWarning =
+          "WAHA cannot reach this webhook URL from its server. Use a public HTTPS URL (e.g. ngrok or your deployed app), not localhost or host.docker.internal.";
+      }
+
+      try {
+        const registered = await getWahaSessionWebhookUrls();
+        webhookConfigured = registered.includes(webhookUrl);
+      } catch {
+        webhookConfigured = false;
+      }
+    } else {
+      webhookReachabilityWarning =
+        "Set WAHA_WEBHOOK_BASE_URL or WHATSAPP_HOOK_URL so inbound replies can reach LeadGen.";
+    }
+
     return NextResponse.json({
       configured: true,
       whatsAppEnabled: agent.whatsAppEnabled,
@@ -83,6 +107,8 @@ export async function GET() {
       linkedName,
       linkedPhone,
       webhookUrl,
+      webhookConfigured,
+      webhookReachabilityWarning,
       dashboardUrl,
       conversationCount: conversations.length,
     });

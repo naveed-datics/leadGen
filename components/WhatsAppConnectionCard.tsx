@@ -11,6 +11,8 @@ type ConnectionState = {
   linkedName: string | null;
   linkedPhone: string | null;
   webhookUrl: string;
+  webhookConfigured?: boolean;
+  webhookReachabilityWarning?: string | null;
   dashboardUrl: string | null;
   conversationCount: number;
 };
@@ -121,6 +123,23 @@ export function WhatsAppConnectionCard() {
     }
   }
 
+  async function syncWebhook() {
+    setActionLoading("sync-webhook");
+    setError(null);
+    try {
+      const res = await fetch("/api/agent/whatsapp/connection/sync-webhook", {
+        method: "POST",
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to register webhook");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to register webhook");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   const connected = connection?.connected ?? false;
   const statusLabel = connection?.status ?? "UNKNOWN";
 
@@ -191,6 +210,22 @@ export function WhatsAppConnectionCard() {
               </div>
             )}
 
+            {connection.webhookReachabilityWarning && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                {connection.webhookReachabilityWarning}
+              </div>
+            )}
+
+            {connection.configured &&
+              connection.webhookUrl &&
+              connection.webhookConfigured === false &&
+              !connection.webhookReachabilityWarning && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                  Inbound webhook is not registered on the WAHA session. Click
+                  &quot;Register webhook&quot; so replies appear in chat.
+                </div>
+              )}
+
             <dl className="grid gap-3 sm:grid-cols-2">
               <div>
                 <dt className="text-xs uppercase tracking-wide text-zinc-500">Status</dt>
@@ -217,6 +252,16 @@ export function WhatsAppConnectionCard() {
 
           {connection.configured && (
             <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void syncWebhook()}
+                disabled={Boolean(actionLoading) || !connection.webhookUrl}
+                className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-200"
+              >
+                {actionLoading === "sync-webhook"
+                  ? "Registering…"
+                  : "Register webhook"}
+              </button>
               <button
                 type="button"
                 onClick={() => void reconnect()}

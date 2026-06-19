@@ -1,7 +1,7 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/index";
-import { leads, proposals } from "@/lib/db/schema";
+import { leads, proposals, searches } from "@/lib/db/schema";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { whatsappConversations, whatsappMessages } from "@/lib/db/schema";
 import {
@@ -78,8 +78,10 @@ export async function POST(
         phone: leads.phone,
         hasWhatsapp: leads.hasWhatsapp,
         title: leads.title,
+        industry: searches.industry,
       })
       .from(leads)
+      .innerJoin(searches, eq(leads.searchId, searches.id))
       .where(eq(leads.id, leadId))
       .limit(1);
 
@@ -213,7 +215,11 @@ export async function POST(
       conversationId = existingConv.id;
       await db
         .update(whatsappConversations)
-        .set({ lastMessageAt: new Date() })
+        .set({
+          lastMessageAt: new Date(),
+          displayName: lead.title,
+          industry: lead.industry,
+        })
         .where(eq(whatsappConversations.id, conversationId));
     } else {
       const [createdConv] = await db
@@ -223,6 +229,7 @@ export async function POST(
           leadId,
           customerPhone: normalizedPhone,
           displayName: lead.title,
+          industry: lead.industry,
         })
         .returning({ id: whatsappConversations.id });
       conversationId = createdConv.id;

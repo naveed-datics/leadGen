@@ -7,6 +7,7 @@ import {
   real,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -98,6 +99,32 @@ export const leads = pgTable("leads", {
     .notNull(),
 });
 
+export const inboundLeads = pgTable(
+  "inbound_leads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").references(
+      () => whatsappConversations.id,
+      { onDelete: "set null" },
+    ),
+    businessName: text("business_name").notNull(),
+    phone: text("phone").notNull(),
+    industry: text("industry"),
+    firstReplyAt: timestamp("first_reply_at", { withTimezone: true }).notNull(),
+    lastReplyAt: timestamp("last_reply_at", { withTimezone: true }).notNull(),
+    lastReplyBody: text("last_reply_body"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("inbound_leads_agent_phone_uidx").on(table.agentId, table.phone),
+  ],
+);
+
 export const proposals = pgTable("proposals", {
   id: uuid("id").defaultRandom().primaryKey(),
   leadId: uuid("lead_id")
@@ -162,6 +189,7 @@ export const whatsappConversations = pgTable("whatsapp_conversations", {
   leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),
   customerPhone: text("customer_phone").notNull(),
   displayName: text("display_name"),
+  industry: text("industry"),
   lastMessageAt: timestamp("last_message_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

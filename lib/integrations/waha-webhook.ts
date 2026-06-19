@@ -6,6 +6,7 @@ import {
   whatsappMessages,
 } from "@/lib/db/schema";
 import { processInboundLeadFollowUp } from "@/lib/integrations/inbound-lead-followup";
+import { ensureInboundLeadFromReply } from "@/lib/integrations/inbound-lead-create";
 import { getWhatsAppConfig } from "@/lib/integrations/whatsapp-config";
 import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
 
@@ -43,7 +44,8 @@ export async function handleWahaWebhook(
   body: WahaWebhookBody,
   options?: HandleWahaWebhookOptions,
 ): Promise<void> {
-  if (body.event !== "message") return;
+  const event = body.event?.trim() ?? "";
+  if (event !== "message" && event !== "message.any") return;
 
   const payload = body.payload;
   if (!payload || payload.fromMe) return;
@@ -52,7 +54,8 @@ export async function handleWahaWebhook(
   const messageBody = payload.body?.trim() ?? "";
   const waMessageId = payload.id?.trim() ?? null;
 
-  if (!from || !messageBody || payload.hasMedia) return;
+  if (!from || !messageBody) return;
+  if (payload.hasMedia && !messageBody) return;
 
   const normalizedFrom = phoneFromChatId(from);
   if (!normalizedFrom) return;
@@ -139,4 +142,12 @@ export async function handleWahaWebhook(
       conversationLeadId,
     });
   }
+
+  await ensureInboundLeadFromReply({
+    agentId,
+    conversationId,
+    customerPhone: normalizedFrom,
+    messageBody,
+    repliedAt: now,
+  });
 }

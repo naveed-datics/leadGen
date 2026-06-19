@@ -72,7 +72,7 @@ export function SearchesTable({ searches }: SearchesTableProps) {
                     href={`/searches/${search.id}`}
                     className="text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
                   >
-                    View leads
+                    Explore
                   </Link>
                 </td>
               </tr>

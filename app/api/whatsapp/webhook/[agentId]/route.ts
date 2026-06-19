@@ -16,8 +16,8 @@ export async function POST(
 
   try {
     await handleWahaWebhook(raw as WahaWebhookBody, { agentId });
-  } catch {
-    // Always acknowledge webhooks.
+  } catch (error) {
+    console.error("[waha-webhook] handler failed:", error);
   }
 
   return NextResponse.json({ ok: true });

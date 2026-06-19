@@ -69,7 +69,9 @@ export function Nav({ children }: { children: React.ReactNode }) {
     }> = [
       { label: "Dashboard", href: "/dashboard", show: true },
       { label: "Chat", href: "/agent/chat", show: role === "agent" },
-      { label: "Leads", href: "/searches", show: true },
+      { label: "Contacts", href: "/agent/contacts", show: role === "agent" },
+      { label: "Opportunities", href: "/searches", show: true },
+      { label: "Leads", href: "/leads", show: true },
       { label: "Settings", href: "/agent/settings", show: role === "agent" },
       { label: "Agents", href: "/admin/agents", show: role === "admin" },
     ];
@@ -79,7 +81,9 @@ export function Nav({ children }: { children: React.ReactNode }) {
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
     if (href === "/agent/chat") return pathname === "/agent/chat";
+    if (href === "/agent/contacts") return pathname === "/agent/contacts";
     if (href === "/searches") return pathname === "/searches" || pathname.startsWith("/searches/");
+    if (href === "/leads") return pathname === "/leads";
     if (href === "/agent/settings") return pathname === "/agent/settings";
     if (href === "/admin/agents") return pathname === "/admin/agents";
     return pathname === href;
