@@ -7,12 +7,14 @@ import {
 } from "@/lib/db/schema";
 import { processInboundLeadFollowUp } from "@/lib/integrations/inbound-lead-followup";
 import { ensureInboundLeadFromReply } from "@/lib/integrations/inbound-lead-create";
+import { resolveWahaChatIdToPhone } from "@/lib/integrations/waha";
 import { getWhatsAppConfig } from "@/lib/integrations/whatsapp-config";
-import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
 
 type WahaMessagePayload = {
   id?: string;
   from?: string;
+  to?: string;
+  participant?: string;
   fromMe?: boolean;
   body?: string;
   hasMedia?: boolean;
@@ -28,16 +30,31 @@ export type HandleWahaWebhookOptions = {
   agentId?: string;
 };
 
-function phoneFromChatId(chatId: string): string | null {
-  const localPart = chatId.split("@")[0]?.trim() ?? "";
-  if (!localPart) return null;
-  return normalizePhoneForWhatsApp(localPart) ?? localPart;
+function extractMessageBody(payload: WahaMessagePayload): string {
+  return payload.body?.trim() ?? "";
+}
+
+function candidateChatIds(payload: WahaMessagePayload): string[] {
+  const ids = [payload.from, payload.participant, payload.to]
+    .map((value) => value?.trim() ?? "")
+    .filter(Boolean);
+  return [...new Set(ids)];
 }
 
 export function isWahaWebhookPayload(body: unknown): body is WahaWebhookBody {
   if (!body || typeof body !== "object") return false;
   const record = body as Record<string, unknown>;
   return typeof record.event === "string" && "payload" in record;
+}
+
+async function resolveInboundCustomerPhone(
+  payload: WahaMessagePayload,
+): Promise<string | null> {
+  for (const chatId of candidateChatIds(payload)) {
+    const resolved = await resolveWahaChatIdToPhone(chatId);
+    if (resolved) return resolved;
+  }
+  return null;
 }
 
 export async function handleWahaWebhook(
@@ -50,19 +67,21 @@ export async function handleWahaWebhook(
   const payload = body.payload;
   if (!payload || payload.fromMe) return;
 
-  const from = payload.from?.trim() ?? "";
-  const messageBody = payload.body?.trim() ?? "";
+  const messageBody = extractMessageBody(payload);
   const waMessageId = payload.id?.trim() ?? null;
 
-  if (!from || !messageBody) return;
-  if (payload.hasMedia && !messageBody) return;
+  if (!messageBody) return;
 
-  const normalizedFrom = phoneFromChatId(from);
+  const normalizedFrom = await resolveInboundCustomerPhone(payload);
   if (!normalizedFrom) return;
 
   const { inboundAnalysisSkipRelationship } = getWhatsAppConfig();
 
   const db = getDb();
+
+  const agentClause = options?.agentId
+    ? eq(whatsappConversations.agentId, options.agentId)
+    : undefined;
 
   const [existingConv] = await db
     .select({
@@ -71,7 +90,11 @@ export async function handleWahaWebhook(
       leadId: whatsappConversations.leadId,
     })
     .from(whatsappConversations)
-    .where(eq(whatsappConversations.customerPhone, normalizedFrom))
+    .where(
+      agentClause
+        ? and(eq(whatsappConversations.customerPhone, normalizedFrom), agentClause)
+        : eq(whatsappConversations.customerPhone, normalizedFrom),
+    )
     .orderBy(desc(whatsappConversations.lastMessageAt))
     .limit(1);
 

@@ -114,6 +114,45 @@ export async function sendWahaTextMessage(input: {
   return { waMessageId };
 }
 
+type WahaLidLookupResponse = {
+  lid?: string;
+  pn?: string | null;
+};
+
+function phoneFromPnChatId(chatId: string): string | null {
+  const localPart = chatId.split("@")[0]?.trim() ?? "";
+  if (!localPart) return null;
+  return normalizePhoneForWhatsApp(localPart) ?? localPart;
+}
+
+/** Map WAHA chat id (@c.us, @s.whatsapp.net, or @lid) to normalized phone digits. */
+export async function resolveWahaChatIdToPhone(chatId: string): Promise<string | null> {
+  const trimmed = chatId.trim();
+  if (!trimmed) return null;
+
+  const [localPart, suffix = ""] = trimmed.split("@");
+  if (!localPart) return null;
+
+  if (suffix === "c.us" || suffix === "s.whatsapp.net") {
+    return phoneFromPnChatId(trimmed);
+  }
+
+  if (suffix === "lid") {
+    const session = getWahaSession();
+    const response = await wahaFetch(
+      `/api/${encodeURIComponent(session)}/lids/${encodeURIComponent(localPart)}`,
+    );
+    if (!response.ok) return null;
+
+    const data = (await response.json().catch(() => null)) as WahaLidLookupResponse | null;
+    const pn = data?.pn?.trim();
+    if (!pn) return null;
+    return phoneFromPnChatId(pn);
+  }
+
+  return normalizePhoneForWhatsApp(localPart) ?? localPart;
+}
+
 export type WahaSessionStatus =
   | "STOPPED"
   | "STARTING"
@@ -159,7 +198,7 @@ function buildSessionConfig(webhookUrl?: string): WahaSessionConfig | undefined 
 
   const webhook: WahaWebhookConfig = {
     url: webhookUrl,
-    events: ["message"],
+    events: ["message", "message.any"],
   };
 
   const secret = process.env.WAHA_WEBHOOK_SECRET?.trim();
