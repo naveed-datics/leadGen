@@ -4,6 +4,10 @@ import { getDb } from "@/lib/db/index";
 import { leads, proposals, searches } from "@/lib/db/schema";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
 import type { ProposalStatus } from "@/lib/proposal-status";
+import {
+  formatFollowUpStatus,
+  getFollowUpsForProposals,
+} from "@/lib/proposal-follow-up-sequence";
 
 export async function GET(
   _request: Request,
@@ -55,10 +59,16 @@ export async function GET(
         proposalBody: proposals.body,
         proposalSentAt: proposals.sentAt,
         proposalRepliedAt: proposals.repliedAt,
+        proposalDemoUrl: proposals.demoUrl,
       })
       .from(leads)
       .leftJoin(proposals, eq(proposals.leadId, leads.id))
       .where(eq(leads.searchId, id));
+
+    const proposalIds = leadRows
+      .map((row) => row.proposalId)
+      .filter((id): id is string => Boolean(id));
+    const followUpsByProposal = await getFollowUpsForProposals(proposalIds);
 
     return NextResponse.json({
       search: {
@@ -83,14 +93,21 @@ export async function GET(
         thumbnail: row.thumbnail,
         hasWhatsapp: row.hasWhatsapp,
         proposal:
-          row.proposalId && row.proposalBody
-            ? {
-                id: row.proposalId,
-                status: row.proposalStatus as ProposalStatus,
-                body: row.proposalBody,
-                sentAt: row.proposalSentAt?.toISOString() ?? null,
-                repliedAt: row.proposalRepliedAt?.toISOString() ?? null,
-              }
+          row.proposalId
+            ? (() => {
+                const followUps =
+                  followUpsByProposal.get(row.proposalId) ?? [];
+                return {
+                  id: row.proposalId,
+                  status: row.proposalStatus as ProposalStatus,
+                  body: row.proposalBody ?? "",
+                  sentAt: row.proposalSentAt?.toISOString() ?? null,
+                  repliedAt: row.proposalRepliedAt?.toISOString() ?? null,
+                  demoUrl: row.proposalDemoUrl ?? null,
+                  followUps,
+                  followUpLabel: formatFollowUpStatus(followUps),
+                };
+              })()
             : null,
       })),
     });

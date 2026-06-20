@@ -3,8 +3,9 @@ import { NextResponse } from "next/server";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { inboundLeads, users } from "@/lib/db/schema";
+import { syncInboundLeadsFromRepliedConversations } from "@/lib/integrations/inbound-lead-create";
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!process.env.DATABASE_URL) {
     return NextResponse.json(
       { error: "Database is not configured" },
@@ -15,6 +16,14 @@ export async function GET() {
   try {
     const user = await requireAuth();
     const db = getDb();
+    const shouldSync =
+      new URL(request.url).searchParams.get("sync") === "1";
+
+    if (shouldSync) {
+      await syncInboundLeadsFromRepliedConversations(
+        user.role === "agent" ? user.id : undefined,
+      );
+    }
 
     const rows = await db
       .select({

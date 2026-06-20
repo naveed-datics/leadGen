@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type ListMode = "inbox" | "sent";
 
@@ -45,6 +45,9 @@ export default function AgentChatPage() {
   const [startPhone, setStartPhone] = useState("");
   const [startText, setStartText] = useState("");
   const [starting, setStarting] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(async (mode: ListMode, options?: LoadOptions) => {
     const silent = options?.silent ?? false;
@@ -109,10 +112,16 @@ export default function AgentChatPage() {
   useEffect(() => {
     if (!activeId) {
       setMessages([]);
+      setReplyText("");
       return;
     }
+    setReplyText("");
     void loadMessages(activeId);
   }, [activeId, loadMessages]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, activeId]);
 
   useEffect(() => {
     const tick = () => {
@@ -154,6 +163,41 @@ export default function AgentChatPage() {
       setError(e2 instanceof Error ? e2.message : "Failed to start chat");
     } finally {
       setStarting(false);
+    }
+  }
+
+
+  async function sendReply(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeId || !replyText.trim()) return;
+    setError(null);
+    setSuccess(null);
+    setSending(true);
+    try {
+      const res = await fetch(
+        `/api/agent/chat/conversations/${activeId}/messages`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: replyText.trim() }),
+        },
+      );
+      const data = (await res.json()) as {
+        message?: Message;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Failed to send message");
+      setReplyText("");
+      if (data.message) {
+        setMessages((prev) => [...prev, data.message!]);
+      } else {
+        await loadMessages(activeId, { silent: true });
+      }
+      void loadConversations(listMode, { silent: true });
+    } catch (e2) {
+      setError(e2 instanceof Error ? e2.message : "Failed to send message");
+    } finally {
+      setSending(false);
     }
   }
 
@@ -388,9 +432,43 @@ export default function AgentChatPage() {
                     </div>
                   </div>
                 ))}
+                <div ref={messagesEndRef} />
               </div>
             )}
           </div>
+          {activeId && (
+            <form
+              onSubmit={sendReply}
+              className="border-t border-zinc-200 p-3 dark:border-zinc-800"
+            >
+              <div className="flex gap-2">
+                <textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void sendReply(e);
+                    }
+                  }}
+                  placeholder="Type a reply…"
+                  rows={2}
+                  disabled={sending}
+                  className="min-h-[44px] flex-1 resize-none rounded-xl border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                />
+                <button
+                  type="submit"
+                  disabled={sending || !replyText.trim()}
+                  className="self-end rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  {sending ? "Sending…" : "Send"}
+                </button>
+              </div>
+              <p className="mt-1 text-[10px] text-zinc-500">
+                Enter to send · Shift+Enter for new line
+              </p>
+            </form>
+          )}
         </section>
       </div>
     </main>

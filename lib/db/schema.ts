@@ -26,6 +26,12 @@ export const users = pgTable("users", {
   waBusinessAccountId: text("wa_business_account_id"),
   waAppId: text("wa_app_id"),
   whatsAppEnabled: boolean("whatsapp_enabled").notNull().default(false),
+  proposalTemplate: text("proposal_template"),
+  demoEnabled: boolean("demo_enabled").notNull().default(false),
+  wpBaseUrl: text("wp_base_url"),
+  wpUsername: text("wp_username"),
+  wpAppPasswordEnc: text("wp_app_password_enc"),
+  defaultDemoPageId: integer("default_demo_page_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -43,6 +49,9 @@ export const searches = pgTable("searches", {
   totalFetched: integer("total_fetched").notNull(),
   totalWithoutWebsite: integer("total_without_website").notNull(),
   pagesFetched: integer("pages_fetched").notNull(),
+  proposalTemplate: text("proposal_template"),
+  demoEnabled: boolean("demo_enabled").notNull().default(false),
+  defaultDemoPageId: integer("default_demo_page_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -133,6 +142,8 @@ export const proposals = pgTable("proposals", {
     .references(() => leads.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
   status: text("status").notNull().default("in_progress"),
+  demoUrl: text("demo_url"),
+  wpDemoPageId: integer("wp_demo_page_id"),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   repliedAt: timestamp("replied_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -142,6 +153,31 @@ export const proposals = pgTable("proposals", {
     .defaultNow()
     .notNull(),
 });
+
+export const proposalFollowUps = pgTable(
+  "proposal_follow_ups",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    proposalId: uuid("proposal_id")
+      .notNull()
+      .references(() => proposals.id, { onDelete: "cascade" }),
+    step: integer("step").notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    status: text("status").notNull().default("pending"),
+    body: text("body").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("proposal_follow_ups_proposal_step_uidx").on(
+      table.proposalId,
+      table.step,
+    ),
+  ],
+);
 
 export const websiteStatsCache = pgTable("website_stats_cache", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -246,12 +282,23 @@ export const leadsRelations = relations(leads, ({ one }) => ({
   }),
 }));
 
-export const proposalsRelations = relations(proposals, ({ one }) => ({
+export const proposalsRelations = relations(proposals, ({ one, many }) => ({
   lead: one(leads, {
     fields: [proposals.leadId],
     references: [leads.id],
   }),
+  followUps: many(proposalFollowUps),
 }));
+
+export const proposalFollowUpsRelations = relations(
+  proposalFollowUps,
+  ({ one }) => ({
+    proposal: one(proposals, {
+      fields: [proposalFollowUps.proposalId],
+      references: [proposals.id],
+    }),
+  }),
+);
 
 export const leadCompetitorPicksRelations = relations(
   leadCompetitorPicks,

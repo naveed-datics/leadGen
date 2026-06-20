@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, exists } from "drizzle-orm";
 import { getDb } from "@/lib/db/index";
 import {
   inboundLeads,
@@ -106,4 +106,79 @@ export async function ensureInboundLeadFromReply(
     lastReplyAt: input.repliedAt,
     lastReplyBody: input.messageBody,
   });
+}
+
+/** Create or update inbound leads for conversations that already have outbound + inbound messages. */
+export async function syncInboundLeadsFromRepliedConversations(
+  agentId?: string,
+): Promise<void> {
+  const db = getDb();
+
+  const outboundExists = exists(
+    db
+      .select({ id: whatsappMessages.id })
+      .from(whatsappMessages)
+      .where(
+        and(
+          eq(whatsappMessages.conversationId, whatsappConversations.id),
+          eq(whatsappMessages.direction, "outbound"),
+        ),
+      ),
+  );
+
+  const inboundExists = exists(
+    db
+      .select({ id: whatsappMessages.id })
+      .from(whatsappMessages)
+      .where(
+        and(
+          eq(whatsappMessages.conversationId, whatsappConversations.id),
+          eq(whatsappMessages.direction, "inbound"),
+        ),
+      ),
+  );
+
+  const conversations = await db
+    .select({
+      id: whatsappConversations.id,
+      agentId: whatsappConversations.agentId,
+      customerPhone: whatsappConversations.customerPhone,
+    })
+    .from(whatsappConversations)
+    .where(
+      agentId
+        ? and(
+            eq(whatsappConversations.agentId, agentId),
+            outboundExists,
+            inboundExists,
+          )
+        : and(outboundExists, inboundExists),
+    );
+
+  for (const conv of conversations) {
+    const [latestInbound] = await db
+      .select({
+        body: whatsappMessages.body,
+        createdAt: whatsappMessages.createdAt,
+      })
+      .from(whatsappMessages)
+      .where(
+        and(
+          eq(whatsappMessages.conversationId, conv.id),
+          eq(whatsappMessages.direction, "inbound"),
+        ),
+      )
+      .orderBy(desc(whatsappMessages.createdAt))
+      .limit(1);
+
+    if (!latestInbound) continue;
+
+    await ensureInboundLeadFromReply({
+      agentId: conv.agentId,
+      conversationId: conv.id,
+      customerPhone: conv.customerPhone,
+      messageBody: latestInbound.body,
+      repliedAt: latestInbound.createdAt,
+    });
+  }
 }

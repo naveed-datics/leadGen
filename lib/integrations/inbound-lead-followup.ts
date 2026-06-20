@@ -7,6 +7,7 @@ import {
   whatsappConversations,
 } from "@/lib/db/schema";
 import { PROPOSAL_STATUS_REPLIED, PROPOSAL_STATUS_SENT } from "@/lib/proposal-status";
+import { cancelProposalFollowUps } from "@/lib/proposal-follow-up-sequence";
 import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
 
 export type InboundFollowUpInput = {
@@ -106,4 +107,6 @@ export async function processInboundLeadFollowUp(
       updatedAt: now,
     })
     .where(eq(proposals.id, proposal.id));
+
+  await cancelProposalFollowUps(proposal.id, "Lead replied");
 }

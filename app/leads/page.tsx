@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 type InboundLead = {
   id: string;
@@ -15,31 +15,154 @@ type InboundLead = {
   agentName: string | null;
 };
 
+type LoadOptions = {
+  silent?: boolean;
+  sync?: boolean;
+};
+
+const POLL_MS = 5000;
+
+function leadsFingerprint(leads: InboundLead[]): string {
+  return leads
+    .map(
+      (lead) =>
+        `${lead.id}|${lead.lastReplyAt}|${lead.lastReplyBody ?? ""}|${lead.businessName}`,
+    )
+    .join(";");
+}
+
+const InboundLeadRow = memo(function InboundLeadRow({
+  lead,
+}: {
+  lead: InboundLead;
+}) {
+  const chatHref = lead.conversationId
+    ? `/agent/chat?conversation=${lead.conversationId}`
+    : "/agent/chat";
+
+  return (
+    <tr className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/30">
+      <td className="px-4 py-3">
+        <p className="font-medium text-zinc-900 dark:text-zinc-50">
+          {lead.businessName}
+        </p>
+        {lead.agentName && (
+          <p className="text-xs text-zinc-500">Agent: {lead.agentName}</p>
+        )}
+      </td>
+      <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+        {lead.phone}
+      </td>
+      <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+        {lead.industry ?? "—"}
+      </td>
+      <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+        <time dateTime={lead.lastReplyAt}>
+          {new Date(lead.lastReplyAt).toLocaleString()}
+        </time>
+        {lead.lastReplyBody && (
+          <p className="mt-1 line-clamp-2 text-xs text-zinc-500">
+            {lead.lastReplyBody}
+          </p>
+        )}
+      </td>
+      <td className="px-4 py-3 text-right">
+        <Link
+          href={chatHref}
+          className="inline-flex rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950/40"
+        >
+          View chat
+        </Link>
+      </td>
+    </tr>
+  );
+});
+
+const InboundLeadCard = memo(function InboundLeadCard({
+  lead,
+}: {
+  lead: InboundLead;
+}) {
+  const chatHref = lead.conversationId
+    ? `/agent/chat?conversation=${lead.conversationId}`
+    : "/agent/chat";
+
+  return (
+    <li className="space-y-2 px-4 py-4">
+      <p className="font-medium">{lead.businessName}</p>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">{lead.phone}</p>
+      {lead.industry && (
+        <p className="text-xs text-zinc-500">Industry: {lead.industry}</p>
+      )}
+      <Link
+        href={chatHref}
+        className="inline-block text-xs font-medium text-sky-700 dark:text-sky-300"
+      >
+        View chat →
+      </Link>
+    </li>
+  );
+});
+
 export default function InboundLeadsPage() {
   const [leads, setLeads] = useState<InboundLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const fingerprintRef = useRef("");
 
-  const loadLeads = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadLeads = useCallback(async (options?: LoadOptions) => {
+    const silent = options?.silent ?? false;
+    const sync = options?.sync ?? false;
+
+    if (!silent) {
+      setError(null);
+      setLoading(true);
+    }
+
     try {
-      const res = await fetch("/api/leads/inbound", { cache: "no-store" });
+      const url = sync ? "/api/leads/inbound?sync=1" : "/api/leads/inbound";
+      const res = await fetch(url, { cache: "no-store" });
       const data = (await res.json()) as { leads?: InboundLead[]; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed to load leads");
-      setLeads(data.leads ?? []);
+
+      const next = data.leads ?? [];
+      const nextFingerprint = leadsFingerprint(next);
+      if (nextFingerprint !== fingerprintRef.current) {
+        fingerprintRef.current = nextFingerprint;
+        setLeads(next);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load leads");
-      setLeads([]);
+      if (!silent) {
+        setError(e instanceof Error ? e.message : "Failed to load leads");
+        fingerprintRef.current = "";
+        setLeads([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadLeads();
-    const intervalId = setInterval(() => void loadLeads(), 5000);
-    return () => clearInterval(intervalId);
+    void loadLeads({ sync: true });
+
+    let pollCount = 0;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      pollCount += 1;
+      void loadLeads({ silent: true, sync: pollCount % 6 === 0 });
+    }, POLL_MS);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadLeads({ silent: true, sync: true });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [loadLeads]);
 
   return (
@@ -94,62 +217,14 @@ export default function InboundLeadsPage() {
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {leads.map((lead) => (
-                  <tr
-                    key={lead.id}
-                    className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/30"
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                        {lead.businessName}
-                      </p>
-                      {lead.agentName && (
-                        <p className="text-xs text-zinc-500">Agent: {lead.agentName}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-                      {lead.phone}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-                      {lead.industry ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-                      <time dateTime={lead.lastReplyAt}>
-                        {new Date(lead.lastReplyAt).toLocaleString()}
-                      </time>
-                      {lead.lastReplyBody && (
-                        <p className="mt-1 line-clamp-2 text-xs text-zinc-500">
-                          {lead.lastReplyBody}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href="/agent/chat"
-                        className="inline-flex rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950/40"
-                      >
-                        View chat
-                      </Link>
-                    </td>
-                  </tr>
+                  <InboundLeadRow key={lead.id} lead={lead} />
                 ))}
               </tbody>
             </table>
           </div>
           <ul className="divide-y divide-zinc-100 sm:hidden dark:divide-zinc-800">
             {leads.map((lead) => (
-              <li key={lead.id} className="space-y-2 px-4 py-4">
-                <p className="font-medium">{lead.businessName}</p>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">{lead.phone}</p>
-                {lead.industry && (
-                  <p className="text-xs text-zinc-500">Industry: {lead.industry}</p>
-                )}
-                <Link
-                  href="/agent/chat"
-                  className="inline-block text-xs font-medium text-sky-700 dark:text-sky-300"
-                >
-                  View chat →
-                </Link>
-              </li>
+              <InboundLeadCard key={lead.id} lead={lead} />
             ))}
           </ul>
         </div>

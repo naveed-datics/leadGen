@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { buildProposalTemplate } from "@/lib/proposal-template";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  buildProposalTemplate,
+  injectDemoUrl,
+} from "@/lib/proposal-template";
 import type { CompetitorWithStats, ProposalSummary } from "@/lib/types";
 
 type ModalMode = "create" | "edit" | "view";
@@ -14,9 +17,18 @@ type MeResponse =
     }
   | { error: string };
 
+type SearchSettingsResponse = {
+  demoEnabled: boolean;
+  wpConfigured: boolean;
+  effectiveDemoPageId: number | null;
+  effectiveTemplate?: string;
+  template?: string | null;
+};
+
 interface ProposalModalProps {
   open: boolean;
   mode: ModalMode;
+  searchId: string;
   leadId: string;
   businessName: string;
   industry: string;
@@ -30,11 +42,13 @@ interface ProposalModalProps {
   onClose: () => void;
   onSave: (body: string) => Promise<ProposalSummary>;
   onSendWhatsApp: (body: string) => Promise<void>;
+  onDemoCreated?: (proposal: ProposalSummary) => void;
 }
 
 export function ProposalModal({
   open,
   mode,
+  searchId,
   leadId,
   businessName,
   industry,
@@ -48,13 +62,61 @@ export function ProposalModal({
   onClose,
   onSave,
   onSendWhatsApp,
+  onDemoCreated,
 }: ProposalModalProps) {
   const [body, setBody] = useState(initialBody);
   const [templateLoading, setTemplateLoading] = useState(false);
   const [senderName, setSenderName] = useState("");
+  const [searchSettings, setSearchSettings] =
+    useState<SearchSettingsResponse | null>(null);
+  const [demoUrl, setDemoUrl] = useState<string | null>(
+    proposal?.demoUrl ?? null,
+  );
+  const [demoCreating, setDemoCreating] = useState(false);
+  const [demoError, setDemoError] = useState<string | null>(null);
+  const autoDemoAttempted = useRef(false);
   const [autoSavingDraft, setAutoSavingDraft] = useState(false);
   const [autoSavedDraft, setAutoSavedDraft] = useState(false);
   const readOnly = mode === "view";
+
+  useEffect(() => {
+    if (!open) {
+      autoDemoAttempted.current = false;
+      return;
+    }
+    setDemoUrl(proposal?.demoUrl ?? null);
+    setDemoError(null);
+  }, [open, proposal?.demoUrl]);
+
+  const handleCreateDemo = useCallback(async () => {
+    setDemoCreating(true);
+    setDemoError(null);
+    try {
+      const res = await fetch(`/api/leads/${leadId}/demo`, { method: "POST" });
+      const data = (await res.json()) as {
+        demoUrl?: string;
+        proposal?: ProposalSummary;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Failed to create demo");
+
+      const nextDemoUrl = data.demoUrl ?? null;
+      setDemoUrl(nextDemoUrl);
+      if (nextDemoUrl) {
+        setBody((prev) => injectDemoUrl(prev, nextDemoUrl));
+      }
+      if (data.proposal) {
+        onDemoCreated?.(data.proposal);
+        setAutoSavedDraft(false);
+      }
+      return nextDemoUrl;
+    } catch (e) {
+      setDemoError(e instanceof Error ? e.message : "Failed to create demo");
+      return null;
+    } finally {
+      setDemoCreating(false);
+    }
+  }, [leadId, onDemoCreated]);
 
   useEffect(() => {
     if (!open) return;
@@ -79,6 +141,29 @@ export function ProposalModal({
   useEffect(() => {
     if (!open) return;
 
+    let cancelled = false;
+    fetch(`/api/searches/${searchId}/settings/proposal-template`, {
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        const data = (await res.json()) as SearchSettingsResponse & {
+          error?: string;
+        };
+        if (cancelled) return;
+        if (res.ok) setSearchSettings(data);
+      })
+      .catch(() => {
+        if (!cancelled) setSearchSettings(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, searchId]);
+
+  useEffect(() => {
+    if (!open) return;
+
     if (proposal?.body) {
       setBody(proposal.body);
       setTemplateLoading(false);
@@ -97,15 +182,31 @@ export function ProposalModal({
     setBody("");
     setAutoSavedDraft(false);
 
-    fetch(`/api/leads/${leadId}/competitors?includeStats=true&refreshStats=true`)
-      .then(async (res) => {
-        const data = await res.json();
+    Promise.all([
+      fetch(`/api/leads/${leadId}/competitors?includeStats=true&refreshStats=true`),
+      fetch(`/api/searches/${searchId}/settings/proposal-template`, {
+        cache: "no-store",
+      }),
+    ])
+      .then(async ([competitorsRes, templateRes]) => {
+        const competitorsData = await competitorsRes.json();
+        const templateData = templateRes.ok
+          ? ((await templateRes.json()) as SearchSettingsResponse)
+          : null;
+
         if (cancelled) return;
 
-        let competitors: CompetitorWithStats[] = [];
-        if (res.ok) {
-          competitors = data.competitors ?? [];
+        if (templateData) {
+          setSearchSettings(templateData);
         }
+
+        let competitors: CompetitorWithStats[] = [];
+        if (competitorsRes.ok) {
+          competitors = competitorsData.competitors ?? [];
+        }
+
+        const template =
+          templateData?.effectiveTemplate ?? templateData?.template ?? null;
 
         setBody(
           buildProposalTemplate({
@@ -114,6 +215,8 @@ export function ProposalModal({
             location,
             competitors,
             senderName,
+            demoUrl: proposal?.demoUrl ?? undefined,
+            customTemplate: template,
           }),
         );
       })
@@ -126,6 +229,7 @@ export function ProposalModal({
               location,
               competitors: [],
               senderName,
+              demoUrl: proposal?.demoUrl ?? undefined,
             }),
           );
         }
@@ -141,12 +245,36 @@ export function ProposalModal({
     open,
     mode,
     leadId,
+    searchId,
     proposal,
     businessName,
     industry,
     location,
     initialBody,
     senderName,
+    proposal?.demoUrl,
+  ]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (mode !== "create") return;
+    if (templateLoading || demoCreating) return;
+    if (proposal?.demoUrl || demoUrl) return;
+    if (!searchSettings?.demoEnabled) return;
+    if (!searchSettings.wpConfigured || !searchSettings.effectiveDemoPageId) return;
+    if (autoDemoAttempted.current) return;
+
+    autoDemoAttempted.current = true;
+    void handleCreateDemo();
+  }, [
+    open,
+    mode,
+    templateLoading,
+    demoCreating,
+    proposal?.demoUrl,
+    demoUrl,
+    searchSettings,
+    handleCreateDemo,
   ]);
 
   useEffect(() => {
@@ -177,6 +305,22 @@ export function ProposalModal({
 
   if (!open) return null;
 
+  const canCreateDemo =
+    !readOnly &&
+    searchSettings?.demoEnabled &&
+    searchSettings.wpConfigured &&
+    Boolean(searchSettings.effectiveDemoPageId) &&
+    !demoCreating;
+
+  const demoDisabledReason =
+    !searchSettings?.demoEnabled
+      ? null
+      : !searchSettings.wpConfigured
+        ? "Connect WordPress in Agent Settings"
+        : !searchSettings.effectiveDemoPageId
+          ? "Select a landing page in search Settings"
+          : null;
+
   const canSend =
     whatsappConfigured &&
     Boolean(leadPhone?.trim()) &&
@@ -184,21 +328,24 @@ export function ProposalModal({
     Boolean(body.trim()) &&
     !readOnly &&
     !templateLoading &&
-    !autoSavingDraft;
+    !autoSavingDraft &&
+    !demoCreating;
 
   const sendDisabledReason = templateLoading
     ? "Loading competitor data for your proposal…"
     : autoSavingDraft
       ? "Saving (In progress)…"
-    : !whatsappConfigured
-      ? "Set WAHA_BASE_URL and WAHA_SESSION in .env.local and pair your WhatsApp session in WAHA"
-      : !leadPhone?.trim()
-        ? "This lead has no phone number"
-        : hasWhatsapp === false
-          ? "This number is not on WhatsApp"
-          : !body.trim()
-            ? "Write a message before sending"
-            : null;
+      : demoCreating
+        ? "Creating demo site…"
+        : !whatsappConfigured
+          ? "Set WAHA_BASE_URL and WAHA_SESSION in .env.local and pair your WhatsApp session in WAHA"
+          : !leadPhone?.trim()
+            ? "This lead has no phone number"
+            : hasWhatsapp === false
+              ? "This number is not on WhatsApp"
+              : !body.trim()
+                ? "Write a message before sending"
+                : null;
 
   return (
     <div
@@ -238,6 +385,20 @@ export function ProposalModal({
           </p>
         )}
 
+        {demoUrl && (
+          <p className="mt-2 text-xs">
+            Demo site:{" "}
+            <a
+              href={demoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+            >
+              {demoUrl}
+            </a>
+          </p>
+        )}
+
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -246,6 +407,12 @@ export function ProposalModal({
           placeholder={templateLoading ? "Loading proposal…" : undefined}
           className="mt-4 w-full resize-y rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 read-only:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:read-only:bg-zinc-900"
         />
+
+        {demoError && (
+          <p role="alert" className="mt-3 text-xs text-red-600 dark:text-red-400">
+            {demoError}
+          </p>
+        )}
 
         {sendDisabledReason && !readOnly && (
           <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
@@ -261,11 +428,26 @@ export function ProposalModal({
           >
             Close
           </button>
+          {!readOnly && searchSettings?.demoEnabled && (
+            <button
+              type="button"
+              disabled={!canCreateDemo}
+              onClick={() => void handleCreateDemo()}
+              title={demoDisabledReason ?? (demoUrl ? "Recreate demo site" : "Create demo site")}
+              className="rounded-lg border border-sky-300 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-700 dark:text-sky-200"
+            >
+              {demoCreating
+                ? "Creating demo…"
+                : demoUrl
+                  ? "Recreate demo"
+                  : "Create demo"}
+            </button>
+          )}
           {!readOnly && (
             <>
               <button
                 type="button"
-                disabled={saving || !body.trim() || templateLoading}
+                disabled={saving || !body.trim() || templateLoading || demoCreating}
                 onClick={() => onSave(body)}
                 className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-900 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
               >

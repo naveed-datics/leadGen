@@ -143,6 +143,12 @@ export default function SearchDetailPage() {
     );
   }
 
+  function handleDemoCreated(proposal: ProposalSummary) {
+    if (!activeLead) return;
+    updateLeadProposal(activeLead.id, proposal);
+    setActiveLead((l) => (l ? { ...l, proposal } : l));
+  }
+
   async function handleSave(body: string): Promise<ProposalSummary> {
     if (!activeLead) {
       throw new Error("No active lead selected");
@@ -324,6 +330,7 @@ export default function SearchDetailPage() {
         <ProposalModal
           open={modalOpen}
           mode={modalMode}
+          searchId={search.id}
           leadId={activeLead.id}
           businessName={activeLead.title}
           industry={search.industry}
@@ -337,6 +344,7 @@ export default function SearchDetailPage() {
           onClose={() => setModalOpen(false)}
           onSave={handleSave}
           onSendWhatsApp={handleSendWhatsApp}
+          onDemoCreated={handleDemoCreated}
         />
       )}
     </main>

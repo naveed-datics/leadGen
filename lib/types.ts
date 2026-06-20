@@ -77,12 +77,22 @@ export interface SearchSummary {
 
 export type ProposalStatus = "in_progress" | "sent" | "replied" | "draft";
 
+export interface ProposalFollowUpSummary {
+  step: number;
+  status: "pending" | "sent" | "cancelled" | "failed";
+  scheduledAt: string;
+  sentAt: string | null;
+}
+
 export interface ProposalSummary {
   id: string;
   status: ProposalStatus;
   body: string;
   sentAt: string | null;
   repliedAt: string | null;
+  demoUrl: string | null;
+  followUps?: ProposalFollowUpSummary[];
+  followUpLabel?: string | null;
 }
 
 export interface LeadWithProposal {

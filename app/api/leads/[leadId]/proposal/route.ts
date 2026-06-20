@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { serializeProposal } from "@/lib/agent-settings";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals } from "@/lib/db/schema";
 import {
   PROPOSAL_STATUS_IN_PROGRESS,
-  type ProposalStatus,
 } from "@/lib/proposal-status";
 
 export async function POST(
@@ -84,13 +84,7 @@ export async function POST(
     }
 
     return NextResponse.json({
-      proposal: {
-        id: proposal.id,
-        status: proposal.status as ProposalStatus,
-        body: proposal.body,
-        sentAt: proposal.sentAt?.toISOString() ?? null,
-        repliedAt: proposal.repliedAt?.toISOString() ?? null,
-      },
+      proposal: serializeProposal(proposal),
     });
   } catch (error) {
     const message =
@@ -156,13 +150,7 @@ export async function PATCH(
       .returning();
 
     return NextResponse.json({
-      proposal: {
-        id: proposal.id,
-        status: "sent" as const,
-        body: proposal.body,
-        sentAt: proposal.sentAt?.toISOString() ?? null,
-        repliedAt: proposal.repliedAt?.toISOString() ?? null,
-      },
+      proposal: serializeProposal({ ...proposal, status: "sent" }),
     });
   } catch (error) {
     const message =

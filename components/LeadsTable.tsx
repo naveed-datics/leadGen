@@ -73,6 +73,11 @@ export function LeadsTable({
                         Replied {formatRelativeTime(lead.proposal.repliedAt)}
                       </p>
                     )}
+                    {lead.proposal && isProposalSent(lead.proposal.status) && lead.proposal.followUpLabel && (
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                        {lead.proposal.followUpLabel}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                     <PhoneCell
@@ -125,6 +130,11 @@ export function LeadsTable({
               {lead.proposal && isProposalReplied(lead.proposal.status) && (
                 <p className="text-xs font-medium text-sky-700 dark:text-sky-300">
                   Replied {formatRelativeTime(lead.proposal.repliedAt)}
+                </p>
+              )}
+              {lead.proposal && isProposalSent(lead.proposal.status) && lead.proposal.followUpLabel && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  {lead.proposal.followUpLabel}
                 </p>
               )}
               <PhoneCell

@@ -35,6 +35,7 @@ SERPAPI_API_KEY=your_serpapi_key
 DATABASE_URL=postgresql://user:password@host/neondb?sslmode=require
 WAHA_BASE_URL=https://your-waha-host.example.com
 WAHA_SESSION=default
+CRON_SECRET=generate-a-random-secret
 ```
 
 - **SerpApi**: [serpapi.com](https://serpapi.com/)
@@ -74,7 +75,22 @@ Open [http://localhost:3000](http://localhost:3000).
 - **Save draft** — stored in Neon
 - **Send via WhatsApp** — sends through WAHA (`POST /api/leads/[leadId]/whatsapp/send`)
 - After sent, only **View** is shown (read-only popup)
+- **Auto follow-ups** — if the lead does not reply, Day 3 and Day 7 WhatsApp follow-ups send automatically (cancelled on reply)
 - **Agent chat** — inbox at `/agent/chat` for conversation threads
+
+### Follow-up sequence cron
+
+Set `CRON_SECRET` in your environment. On Vercel, `vercel.json` runs `/api/cron/proposal-follow-ups` hourly.
+
+For other hosts or local dev:
+
+```bash
+npm run cron:follow-ups
+```
+
+Or call `GET /api/cron/proposal-follow-ups` with header `Authorization: Bearer $CRON_SECRET`.
+
+Set `PROPOSAL_FOLLOW_UPS_ENABLED=false` to disable scheduling and processing.
 
 ## API
 
@@ -85,6 +101,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | GET | `/api/searches/[id]` | Search + leads + proposal status |
 | POST | `/api/leads/[leadId]/proposal` | Create/update draft |
 | POST | `/api/leads/[leadId]/whatsapp/send` | Send proposal via WAHA |
+| GET | `/api/cron/proposal-follow-ups` | Process due follow-ups (requires `CRON_SECRET`) |
 | POST | `/api/whatsapp/check` | Batch-check lead numbers on WhatsApp |
 | GET | `/api/whatsapp/status` | WAHA configuration status |
 | POST | `/api/whatsapp/waha/webhook` | WAHA inbound message webhook |
