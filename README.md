@@ -80,7 +80,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Follow-up sequence cron
 
-Set `CRON_SECRET` in your environment. On Vercel, `vercel.json` runs `/api/cron/proposal-follow-ups` hourly.
+Set `CRON_SECRET` in your environment. On Vercel Hobby, `vercel.json` runs `/api/cron/proposal-follow-ups` **once daily** at 09:00 UTC (Pro plan required for hourly cron).
 
 For other hosts or local dev:
 
@@ -89,6 +89,8 @@ npm run cron:follow-ups
 ```
 
 Or call `GET /api/cron/proposal-follow-ups` with header `Authorization: Bearer $CRON_SECRET`.
+
+For more frequent processing on Hobby, use an external scheduler (e.g. cron-job.org) to hit that endpoint hourly.
 
 Set `PROPOSAL_FOLLOW_UPS_ENABLED=false` to disable scheduling and processing.
 
