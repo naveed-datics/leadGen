@@ -1,4 +1,7 @@
-const REQUEST_TIMEOUT_MS = 30000;
+// The demo-gen pipeline (clone site -> poll -> AI-fill every page -> brand)
+// can legitimately take minutes; the webhook itself allows up to 300s
+// (see its `maxDuration`). Give the client a little headroom beyond that.
+const REQUEST_TIMEOUT_MS = 320000;
 
 export class DemoWebhookError extends Error {
   constructor(
@@ -96,6 +99,76 @@ export async function testDemoWebhookConnectivity(
     }
     const message = error instanceof Error ? error.message : "Connection failed.";
     return { reachable: false, status: null, message };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export type DemoTemplate = {
+  id: number;
+  name: string;
+  slug: string;
+  url: string;
+};
+
+function buildTemplatesUrl(demoWebhookUrl: string): string {
+  const origin = new URL(demoWebhookUrl).origin;
+  return `${origin}/api/webhooks/templates`;
+}
+
+export async function listDemoTemplates(
+  webhookConfig?: { url: string | null; apiKey: string | null } | null,
+): Promise<DemoTemplate[]> {
+  const config = getDemoWebhookConfig(webhookConfig);
+  if (!config) {
+    throw new DemoWebhookError(
+      "Demo webhook is not configured. Set the webhook URL and API key in Agent Settings.",
+      400,
+    );
+  }
+
+  const templatesUrl = buildTemplatesUrl(config.url);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(templatesUrl, {
+      method: "GET",
+      signal: controller.signal,
+      headers: {
+        "X-LeadGen-API-Key": config.apiKey,
+      },
+    });
+
+    const text = await res.text().catch(() => "");
+    let data: { ok?: boolean; templates?: DemoTemplate[]; message?: string } = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      // Non-JSON response — fall through to the generic error below.
+    }
+
+    if (!res.ok || !data.ok) {
+      const status = res.status === 401 || res.status === 403 ? res.status : 502;
+      throw new DemoWebhookError(
+        data.message || `Failed to load templates (${res.status})`,
+        status,
+      );
+    }
+
+    return data.templates ?? [];
+  } catch (error) {
+    if (error instanceof DemoWebhookError) {
+      throw error;
+    }
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new DemoWebhookError("Templates request timed out", 504);
+    }
+    throw new DemoWebhookError(
+      error instanceof Error ? error.message : "Failed to load templates",
+      502,
+    );
   } finally {
     clearTimeout(timeout);
   }

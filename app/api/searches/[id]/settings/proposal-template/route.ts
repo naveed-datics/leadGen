@@ -9,10 +9,13 @@ import { DEFAULT_PROPOSAL_TEMPLATE } from "@/lib/proposal-template";
 
 const MAX_TEMPLATE_LENGTH = 8000;
 
+const MAX_DEMO_TEMPLATE_LENGTH = 200;
+
 const PutSchema = z.object({
   template: z.string().nullable().optional(),
   demoEnabled: z.boolean().optional(),
   defaultDemoPageId: z.number().int().positive().nullable().optional(),
+  demoTemplate: z.string().nullable().optional(),
 });
 
 export async function GET(
@@ -40,6 +43,7 @@ export async function GET(
       demoEnabled: settings.demoEnabled,
       defaultDemoPageId: settings.defaultDemoPageId,
       effectiveDemoPageId: settings.effectiveDemoPageId,
+      demoTemplate: settings.demoTemplate,
       wpConfigured: settings.wpConfigured,
     });
   } catch (error) {
@@ -66,12 +70,13 @@ export async function PUT(
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    const { template, demoEnabled, defaultDemoPageId } = parsed.data;
+    const { template, demoEnabled, defaultDemoPageId, demoTemplate } = parsed.data;
 
     if (
       template === undefined &&
       demoEnabled === undefined &&
-      defaultDemoPageId === undefined
+      defaultDemoPageId === undefined &&
+      demoTemplate === undefined
     ) {
       return NextResponse.json({ error: "No settings provided" }, { status: 400 });
     }
@@ -79,6 +84,17 @@ export async function PUT(
     if (template !== undefined && template !== null && template.length > MAX_TEMPLATE_LENGTH) {
       return NextResponse.json(
         { error: `Template must be at most ${MAX_TEMPLATE_LENGTH} characters` },
+        { status: 400 },
+      );
+    }
+
+    if (
+      demoTemplate !== undefined &&
+      demoTemplate !== null &&
+      demoTemplate.length > MAX_DEMO_TEMPLATE_LENGTH
+    ) {
+      return NextResponse.json(
+        { error: `Demo template must be at most ${MAX_DEMO_TEMPLATE_LENGTH} characters` },
         { status: 400 },
       );
     }
@@ -94,6 +110,12 @@ export async function PUT(
     }
     if (defaultDemoPageId !== undefined) {
       patch.defaultDemoPageId = defaultDemoPageId;
+    }
+    if (demoTemplate !== undefined) {
+      patch.demoTemplate =
+        demoTemplate === null || demoTemplate.trim().length === 0
+          ? null
+          : demoTemplate.trim();
     }
 
     const db = getDb();
@@ -118,6 +140,7 @@ export async function PUT(
       demoEnabled: settings?.demoEnabled ?? false,
       defaultDemoPageId: settings?.defaultDemoPageId ?? null,
       effectiveDemoPageId: settings?.effectiveDemoPageId ?? null,
+      demoTemplate: settings?.demoTemplate ?? null,
       wpConfigured: settings?.wpConfigured ?? false,
     });
   } catch (error) {

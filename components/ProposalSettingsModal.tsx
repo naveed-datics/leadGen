@@ -8,6 +8,13 @@ import {
   SAMPLE_PROPOSAL_PREVIEW,
 } from "@/lib/proposal-template";
 
+type DemoTemplate = {
+  id: number;
+  name: string;
+  slug: string;
+  url: string;
+};
+
 interface ProposalSettingsModalProps {
   open: boolean;
   searchId: string | null;
@@ -34,6 +41,10 @@ export function ProposalSettingsModal({
   const [senderName, setSenderName] = useState(SAMPLE_PROPOSAL_PREVIEW.senderName);
   const [hasCustomTemplate, setHasCustomTemplate] = useState(false);
   const [demoEnabled, setDemoEnabled] = useState(false);
+  const [demoTemplate, setDemoTemplate] = useState("");
+  const [demoTemplates, setDemoTemplates] = useState<DemoTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +73,7 @@ export function ProposalSettingsModal({
           industry?: string;
           location?: string;
           demoEnabled?: boolean;
+          demoTemplate?: string | null;
           error?: string;
         };
         const meData = (await meRes.json()) as {
@@ -88,6 +100,7 @@ export function ProposalSettingsModal({
         setPreviewIndustry(settingsData.industry ?? SAMPLE_PROPOSAL_PREVIEW.industry);
         setPreviewLocation(settingsData.location ?? SAMPLE_PROPOSAL_PREVIEW.location);
         setDemoEnabled(Boolean(settingsData.demoEnabled));
+        setDemoTemplate(settingsData.demoTemplate?.trim() ?? "");
 
         if (meRes.ok && meData.user?.name) {
           setSenderName(meData.user.name);
@@ -116,6 +129,40 @@ export function ProposalSettingsModal({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (!open || !demoEnabled) return;
+
+    let cancelled = false;
+    setTemplatesLoading(true);
+    setTemplatesError(null);
+
+    fetch("/api/agent/settings/demo-webhook/templates", { cache: "no-store" })
+      .then(async (res) => {
+        const data = (await res.json()) as {
+          templates?: DemoTemplate[];
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok) throw new Error(data.error ?? "Failed to load templates");
+        setDemoTemplates(data.templates ?? []);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setDemoTemplates([]);
+          setTemplatesError(
+            e instanceof Error ? e.message : "Failed to load templates",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setTemplatesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, demoEnabled]);
+
   const previewText = buildProposalTemplate({
     businessName: SAMPLE_PROPOSAL_PREVIEW.businessName,
     industry: previewIndustry,
@@ -138,6 +185,7 @@ export function ProposalSettingsModal({
           body: JSON.stringify({
             template,
             demoEnabled,
+            demoTemplate: demoTemplate.trim() || null,
           }),
         },
       );
@@ -229,6 +277,43 @@ export function ProposalSettingsModal({
                   When enabled, clicking Create for a lead in this search will
                   generate a live demo site and include its link via {"{{demoUrl}}"}.
                 </p>
+
+                {demoEnabled && (
+                  <label className="mt-4 block">
+                    <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                      Demo template
+                    </span>
+                    <select
+                      value={demoTemplate}
+                      onChange={(e) => setDemoTemplate(e.target.value)}
+                      disabled={templatesLoading}
+                      className="mt-1 w-full rounded-md border px-3 py-2 text-sm disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                    >
+                      <option value="">
+                        {`Default (this search's industry: "${previewIndustry}")`}
+                      </option>
+                      {demoTemplate &&
+                        !demoTemplates.some((t) => t.slug === demoTemplate) && (
+                          <option value={demoTemplate}>{demoTemplate} (saved, not in list)</option>
+                        )}
+                      {demoTemplates.map((t) => (
+                        <option key={t.id} value={t.slug}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {templatesLoading
+                        ? "Loading templates from the demo webhook…"
+                        : "Sent to the demo webhook as the template. Leave on Default to use this search's industry instead."}
+                    </p>
+                    {templatesError && (
+                      <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                        {templatesError}
+                      </p>
+                    )}
+                  </label>
+                )}
               </section>
 
               <label className="mt-4 block">

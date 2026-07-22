@@ -12,6 +12,7 @@ export async function getSearchSettings(searchId: string, agentId: string) {
       searchTemplate: searches.proposalTemplate,
       searchDemoEnabled: searches.demoEnabled,
       searchDefaultDemoPageId: searches.defaultDemoPageId,
+      demoTemplate: searches.demoTemplate,
       industry: searches.industry,
       location: searches.location,
       query: searches.query,
@@ -54,6 +55,7 @@ export async function getSearchSettings(searchId: string, agentId: string) {
     demoEnabled: row.searchDemoEnabled,
     defaultDemoPageId: row.searchDefaultDemoPageId,
     effectiveDemoPageId,
+    demoTemplate: row.demoTemplate?.trim() || null,
     wpConfigured,
     agentDemoEnabled: row.agentDemoEnabled,
   };

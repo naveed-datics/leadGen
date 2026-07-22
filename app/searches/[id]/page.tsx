@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BusinessDetailModal } from "@/components/BusinessDetailModal";
 import { LeadsTable } from "@/components/LeadsTable";
 import { ProposalModal } from "@/components/ProposalModal";
+import { ProposalSettingsModal } from "@/components/ProposalSettingsModal";
 import { isProposalInProgress, isProposalReplied, isProposalSent } from "@/lib/proposal-status";
 import type { LeadWithProposal, ProposalSummary, SearchDetail } from "@/lib/types";
 
@@ -34,6 +35,7 @@ export default function SearchDetailPage() {
   const [creatingDemoLeadId, setCreatingDemoLeadId] = useState<string | null>(null);
   const [demoEnabled, setDemoEnabled] = useState<boolean | null>(null);
   const [enablingDemo, setEnablingDemo] = useState(false);
+  const [searchSettingsOpen, setSearchSettingsOpen] = useState(false);
 
   const repliedLeads = leads
     .filter((l) => l.proposal && isProposalReplied(l.proposal.status))
@@ -76,14 +78,21 @@ export default function SearchDetailPage() {
       .catch(() => setWhatsappConfigured(false));
   }, []);
 
-  useEffect(() => {
-    fetch(`/api/searches/${id}/settings/proposal-template`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        setDemoEnabled(Boolean(data.demoEnabled));
-      })
-      .catch(() => setDemoEnabled(null));
+  const loadDemoEnabled = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/searches/${id}/settings/proposal-template`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      setDemoEnabled(Boolean(data.demoEnabled));
+    } catch {
+      setDemoEnabled(null);
+    }
   }, [id]);
+
+  useEffect(() => {
+    void loadDemoEnabled();
+  }, [loadDemoEnabled]);
 
   async function handleEnableDemo() {
     setEnablingDemo(true);
@@ -274,9 +283,18 @@ export default function SearchDetailPage() {
         >
           ← Back to history
         </Link>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          {search.query}
-        </h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            {search.query}
+          </h1>
+          <button
+            type="button"
+            onClick={() => setSearchSettingsOpen(true)}
+            className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            Search settings
+          </button>
+        </div>
         <p className="text-sm text-zinc-500">
           {new Date(search.createdAt).toLocaleString("en-US", {
             dateStyle: "medium",
@@ -392,6 +410,14 @@ export default function SearchDetailPage() {
           setBusinessModalOpen(false);
           setBusinessLeadId(null);
         }}
+      />
+
+      <ProposalSettingsModal
+        open={searchSettingsOpen}
+        searchId={search.id}
+        searchQuery={search.query}
+        onClose={() => setSearchSettingsOpen(false)}
+        onSaved={() => void loadDemoEnabled()}
       />
 
       {activeLead && (

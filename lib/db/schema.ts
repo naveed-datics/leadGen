@@ -54,6 +54,7 @@ export const searches = pgTable("searches", {
   proposalTemplate: text("proposal_template"),
   demoEnabled: boolean("demo_enabled").notNull().default(false),
   defaultDemoPageId: integer("default_demo_page_id"),
+  demoTemplate: text("demo_template"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
