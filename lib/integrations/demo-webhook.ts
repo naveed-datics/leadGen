@@ -205,25 +205,32 @@ export async function createDemoSite({
       body: JSON.stringify({ googleBusinessProfileUrl, template }),
     });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      let message = text.slice(0, 300) || `Demo webhook failed (${res.status})`;
-      try {
-        const parsed = JSON.parse(text) as { message?: string; error?: string };
-        message = parsed.message || parsed.error || message;
-      } catch {
-        // Body wasn't JSON — keep the raw text fallback.
-      }
+    const text = await res.text().catch(() => "");
+    let parsed: (Partial<DemoWebhookResponse> & { message?: string; error?: string }) | null =
+      null;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      // Non-JSON response (e.g. an HTML error/timeout page from a proxy) —
+      // handled by the fallback messages below.
+    }
+
+    if (!res.ok || !parsed?.ok) {
+      const message =
+        parsed?.message ||
+        parsed?.error ||
+        (parsed
+          ? `Demo webhook failed (${res.status})`
+          : `Demo webhook returned a non-JSON response (${res.status}). This usually means the request was cut off before finishing — the demo generation may still be running.`);
       const status = res.status === 401 || res.status === 403 ? res.status : 502;
       throw new DemoWebhookError(message, status);
     }
 
-    const data = (await res.json()) as DemoWebhookResponse;
-    if (!data.ok || !data.demoUrl) {
+    if (!parsed.demoUrl) {
       throw new DemoWebhookError("Demo webhook returned an unexpected response", 502);
     }
 
-    return data;
+    return parsed as DemoWebhookResponse;
   } catch (error) {
     if (error instanceof DemoWebhookError) {
       throw error;
