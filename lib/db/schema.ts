@@ -32,6 +32,8 @@ export const users = pgTable("users", {
   wpUsername: text("wp_username"),
   wpAppPasswordEnc: text("wp_app_password_enc"),
   defaultDemoPageId: integer("default_demo_page_id"),
+  demoWebhookUrl: text("demo_webhook_url"),
+  demoWebhookApiKeyEnc: text("demo_webhook_api_key_enc"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

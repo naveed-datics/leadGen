@@ -32,6 +32,8 @@ export default function SearchDetailPage() {
   const whatsappCheckStarted = useRef(false);
   const [leadListMode, setLeadListMode] = useState<LeadListMode>("all");
   const [creatingDemoLeadId, setCreatingDemoLeadId] = useState<string | null>(null);
+  const [demoEnabled, setDemoEnabled] = useState<boolean | null>(null);
+  const [enablingDemo, setEnablingDemo] = useState(false);
 
   const repliedLeads = leads
     .filter((l) => l.proposal && isProposalReplied(l.proposal.status))
@@ -73,6 +75,33 @@ export default function SearchDetailPage() {
       })
       .catch(() => setWhatsappConfigured(false));
   }, []);
+
+  useEffect(() => {
+    fetch(`/api/searches/${id}/settings/proposal-template`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        setDemoEnabled(Boolean(data.demoEnabled));
+      })
+      .catch(() => setDemoEnabled(null));
+  }, [id]);
+
+  async function handleEnableDemo() {
+    setEnablingDemo(true);
+    try {
+      const res = await fetch(`/api/searches/${id}/settings/proposal-template`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ demoEnabled: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to enable demo");
+      setDemoEnabled(true);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to enable demo");
+    } finally {
+      setEnablingDemo(false);
+    }
+  }
 
   const checkWhatsapp = useCallback(async (searchId: string) => {
     setCheckingWhatsapp(true);
@@ -258,6 +287,20 @@ export default function SearchDetailPage() {
           <p className="text-xs text-zinc-500">Checking WhatsApp numbers…</p>
         )}
       </header>
+
+      {demoEnabled === false && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          <span>Demo sites are off for this search. Enable them to use Create demo / Create.</span>
+          <button
+            type="button"
+            disabled={enablingDemo}
+            onClick={() => void handleEnableDemo()}
+            className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+          >
+            {enablingDemo ? "Enabling…" : "Enable demo"}
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <button

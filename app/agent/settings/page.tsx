@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { WhatsAppConnectionCard } from "@/components/WhatsAppConnectionCard";
-import { DemoSettingsCard } from "@/components/DemoSettingsCard";
+import { DemoWebhookCard } from "@/components/DemoWebhookCard";
 
 type AgentSettings = {
   id: string;
@@ -121,7 +121,7 @@ export default function AgentSettingsPage() {
 
       <WhatsAppConnectionCard />
 
-      <DemoSettingsCard />
+      <DemoWebhookCard />
 
       <form onSubmit={save} className="mt-6 space-y-6">
         <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">

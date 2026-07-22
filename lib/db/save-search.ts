@@ -19,6 +19,7 @@ export async function saveSearch(
       totalFetched: result.totalFetched,
       totalWithoutWebsite: result.totalWithoutWebsite,
       pagesFetched: result.pagesFetched,
+      demoEnabled: true,
     })
     .returning({ id: searches.id });
 

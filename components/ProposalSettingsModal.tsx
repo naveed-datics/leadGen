@@ -1,20 +1,12 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   buildProposalTemplate,
   DEFAULT_PROPOSAL_TEMPLATE,
   PROPOSAL_PLACEHOLDERS,
   SAMPLE_PROPOSAL_PREVIEW,
 } from "@/lib/proposal-template";
-
-type WordPressPage = {
-  id: number;
-  title: string;
-  link: string;
-  status: string;
-};
 
 interface ProposalSettingsModalProps {
   open: boolean;
@@ -42,34 +34,10 @@ export function ProposalSettingsModal({
   const [senderName, setSenderName] = useState(SAMPLE_PROPOSAL_PREVIEW.senderName);
   const [hasCustomTemplate, setHasCustomTemplate] = useState(false);
   const [demoEnabled, setDemoEnabled] = useState(false);
-  const [defaultDemoPageId, setDefaultDemoPageId] = useState<number | null>(null);
-  const [wpConfigured, setWpConfigured] = useState(false);
-  const [pages, setPages] = useState<WordPressPage[]>([]);
-  const [pagesLoading, setPagesLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-
-  const loadPages = useCallback(async () => {
-    setPagesLoading(true);
-    try {
-      const res = await fetch("/api/agent/settings/demo/pages", {
-        cache: "no-store",
-      });
-      const data = (await res.json()) as {
-        pages?: WordPressPage[];
-        error?: string;
-      };
-      if (!res.ok) throw new Error(data.error ?? "Failed to load pages");
-      setPages(data.pages ?? []);
-    } catch (e) {
-      setPages([]);
-      setError(e instanceof Error ? e.message : "Failed to load WordPress pages");
-    } finally {
-      setPagesLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     if (!open || !searchId) return;
@@ -94,9 +62,6 @@ export function ProposalSettingsModal({
           industry?: string;
           location?: string;
           demoEnabled?: boolean;
-          defaultDemoPageId?: number | null;
-          effectiveDemoPageId?: number | null;
-          wpConfigured?: boolean;
           error?: string;
         };
         const meData = (await meRes.json()) as {
@@ -123,19 +88,9 @@ export function ProposalSettingsModal({
         setPreviewIndustry(settingsData.industry ?? SAMPLE_PROPOSAL_PREVIEW.industry);
         setPreviewLocation(settingsData.location ?? SAMPLE_PROPOSAL_PREVIEW.location);
         setDemoEnabled(Boolean(settingsData.demoEnabled));
-        setDefaultDemoPageId(
-          settingsData.defaultDemoPageId ??
-            settingsData.effectiveDemoPageId ??
-            null,
-        );
-        setWpConfigured(Boolean(settingsData.wpConfigured));
 
         if (meRes.ok && meData.user?.name) {
           setSenderName(meData.user.name);
-        }
-
-        if (settingsData.wpConfigured) {
-          void loadPages();
         }
       })
       .catch((e) => {
@@ -150,7 +105,7 @@ export function ProposalSettingsModal({
     return () => {
       cancelled = true;
     };
-  }, [open, searchId, loadPages]);
+  }, [open, searchId]);
 
   useEffect(() => {
     if (!open) return;
@@ -160,12 +115,6 @@ export function ProposalSettingsModal({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
-
-  useEffect(() => {
-    if (demoEnabled && wpConfigured && pages.length === 0 && !pagesLoading) {
-      void loadPages();
-    }
-  }, [demoEnabled, wpConfigured, pages.length, pagesLoading, loadPages]);
 
   const previewText = buildProposalTemplate({
     businessName: SAMPLE_PROPOSAL_PREVIEW.businessName,
@@ -189,7 +138,6 @@ export function ProposalSettingsModal({
           body: JSON.stringify({
             template,
             demoEnabled,
-            defaultDemoPageId: demoEnabled ? defaultDemoPageId : null,
           }),
         },
       );
@@ -278,79 +226,9 @@ export function ProposalSettingsModal({
                   <span className="text-sm font-medium">Active website</span>
                 </label>
                 <p className="mt-2 text-xs text-zinc-500">
-                  When enabled, proposals for this search can include a cloned
-                  WordPress demo site URL via {"{{demoUrl}}"}.
+                  When enabled, clicking Create for a lead in this search will
+                  generate a live demo site and include its link via {"{{demoUrl}}"}.
                 </p>
-
-                {demoEnabled && !wpConfigured && (
-                  <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
-                    Connect WordPress in{" "}
-                    <Link
-                      href="/agent/settings"
-                      className="font-medium underline"
-                      onClick={onClose}
-                    >
-                      Agent Settings
-                    </Link>{" "}
-                    first.
-                  </p>
-                )}
-
-                {demoEnabled && wpConfigured && (
-                  <div className="mt-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                        Landing page template
-                      </h3>
-                      <button
-                        type="button"
-                        onClick={() => void loadPages()}
-                        disabled={pagesLoading}
-                        className="text-xs font-medium text-emerald-600 hover:text-emerald-700 disabled:opacity-60"
-                      >
-                        {pagesLoading ? "Refreshing…" : "Refresh"}
-                      </button>
-                    </div>
-
-                    {pagesLoading && pages.length === 0 ? (
-                      <p className="mt-2 text-xs text-zinc-500">Loading pages…</p>
-                    ) : pages.length === 0 ? (
-                      <p className="mt-2 text-xs text-zinc-500">
-                        No WordPress pages found.
-                      </p>
-                    ) : (
-                      <ul className="mt-2 max-h-36 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-2 dark:border-zinc-700">
-                        {pages.map((page) => (
-                          <li key={page.id} className="flex items-start gap-2 text-sm">
-                            <input
-                              type="radio"
-                              name="searchDemoPage"
-                              checked={defaultDemoPageId === page.id}
-                              onChange={() => setDefaultDemoPageId(page.id)}
-                              className="mt-1"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                                {page.title}
-                              </p>
-                              <p className="text-xs text-zinc-500">
-                                {page.status} ·{" "}
-                                <a
-                                  href={page.link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-emerald-600 hover:underline"
-                                >
-                                  Preview
-                                </a>
-                              </p>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
               </section>
 
               <label className="mt-4 block">
@@ -422,12 +300,7 @@ export function ProposalSettingsModal({
           </button>
           <button
             type="button"
-            disabled={
-              loading ||
-              saving ||
-              !template.trim() ||
-              (demoEnabled && wpConfigured && !defaultDemoPageId)
-            }
+            disabled={loading || saving || !template.trim()}
             onClick={() => void handleSave()}
             className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
           >

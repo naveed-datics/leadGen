@@ -1,11 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { serializeProposal } from "@/lib/agent-settings";
+import { getAgentDemoWebhookConfig, serializeProposal } from "@/lib/agent-settings";
 import { getSearchSettings } from "@/lib/search-proposal-settings";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals, searches } from "@/lib/db/schema";
-import { createDemoSite } from "@/lib/integrations/demo-webhook";
+import { createDemoSite, DemoWebhookError } from "@/lib/integrations/demo-webhook";
 import { PROPOSAL_STATUS_IN_PROGRESS } from "@/lib/proposal-status";
 
 export async function POST(
@@ -60,9 +60,12 @@ export async function POST(
       );
     }
 
+    const webhookConfig = await getAgentDemoWebhookConfig(agent.id);
+
     const webhookResponse = await createDemoSite({
       googleBusinessProfileUrl: leadRow.mapsUrl,
       template: leadRow.industry,
+      webhookConfig,
     });
 
     const demoUrl = webhookResponse.demoUrl;
@@ -113,6 +116,9 @@ export async function POST(
     });
   } catch (error) {
     if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof DemoWebhookError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     const message =

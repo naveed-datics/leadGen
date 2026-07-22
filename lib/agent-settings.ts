@@ -80,6 +80,27 @@ export async function getAgentWordPressCredentials(
   };
 }
 
+export async function getAgentDemoWebhookConfig(
+  agentId: string,
+): Promise<{ url: string | null; apiKey: string | null }> {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      demoWebhookUrl: users.demoWebhookUrl,
+      demoWebhookApiKeyEnc: users.demoWebhookApiKeyEnc,
+    })
+    .from(users)
+    .where(eq(users.id, agentId))
+    .limit(1);
+
+  return {
+    url: row?.demoWebhookUrl ?? null,
+    apiKey: row?.demoWebhookApiKeyEnc
+      ? decryptSecret(row.demoWebhookApiKeyEnc)
+      : null,
+  };
+}
+
 export function serializeProposal(proposal: {
   id: string;
   status: string;
