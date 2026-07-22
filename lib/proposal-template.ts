@@ -27,8 +27,11 @@ But I noticed you don't have a website yet, which is essential in today's digita
 {{competitorBlock}}
 It's the right time to come online with a website and start getting potential clients. 🚀
 
-Let's have a quick call — after that, we'll create a *demo website* and finalize it based on your feedback. 😊
+I actually went ahead and built you a *free working demo website* — no strings attached, just take a look 👇
+
 {{demoUrl}}
+
+It's live right now and fully customizable to match your brand. Let's hop on a quick call so I can walk you through it and we can finalize it based on your feedback. 😊
 
 {{senderName}},`;
 

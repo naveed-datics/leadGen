@@ -261,7 +261,6 @@ export function ProposalModal({
     if (templateLoading || demoCreating) return;
     if (proposal?.demoUrl || demoUrl) return;
     if (!searchSettings?.demoEnabled) return;
-    if (!searchSettings.wpConfigured || !searchSettings.effectiveDemoPageId) return;
     if (autoDemoAttempted.current) return;
 
     autoDemoAttempted.current = true;
@@ -306,20 +305,9 @@ export function ProposalModal({
   if (!open) return null;
 
   const canCreateDemo =
-    !readOnly &&
-    searchSettings?.demoEnabled &&
-    searchSettings.wpConfigured &&
-    Boolean(searchSettings.effectiveDemoPageId) &&
-    !demoCreating;
+    !readOnly && Boolean(searchSettings?.demoEnabled) && !demoCreating;
 
-  const demoDisabledReason =
-    !searchSettings?.demoEnabled
-      ? null
-      : !searchSettings.wpConfigured
-        ? "Connect WordPress in Agent Settings"
-        : !searchSettings.effectiveDemoPageId
-          ? "Select a landing page in search Settings"
-          : null;
+  const demoDisabledReason = null;
 
   const canSend =
     whatsappConfigured &&

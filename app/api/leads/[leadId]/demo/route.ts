@@ -1,14 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import {
-  getAgentWordPressCredentials,
-  serializeProposal,
-} from "@/lib/agent-settings";
+import { serializeProposal } from "@/lib/agent-settings";
 import { getSearchSettings } from "@/lib/search-proposal-settings";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals, searches } from "@/lib/db/schema";
-import { cloneWordPressPage } from "@/lib/integrations/wordpress";
+import { createDemoSite } from "@/lib/integrations/demo-webhook";
 import { PROPOSAL_STATUS_IN_PROGRESS } from "@/lib/proposal-status";
 
 export async function POST(
@@ -26,15 +23,6 @@ export async function POST(
 
   try {
     const agent = await requireActiveAgent();
-    const credentials = await getAgentWordPressCredentials(agent.id);
-
-    if (!credentials) {
-      return NextResponse.json(
-        { error: "Connect WordPress in Agent Settings first." },
-        { status: 400 },
-      );
-    }
-
     const db = getDb();
 
     const [leadRow] = await db
@@ -43,6 +31,7 @@ export async function POST(
         searchId: leads.searchId,
         title: leads.title,
         phone: leads.phone,
+        mapsUrl: leads.mapsUrl,
         industry: searches.industry,
         location: searches.location,
       })
@@ -64,29 +53,19 @@ export async function POST(
       );
     }
 
-    const sourcePageId = searchSettings.effectiveDemoPageId;
-    if (!sourcePageId) {
+    if (!leadRow.mapsUrl) {
       return NextResponse.json(
-        { error: "Select a landing page template in search Settings." },
+        { error: "This lead has no Google Business Profile URL to build a demo from." },
         { status: 400 },
       );
     }
 
-    const slug = `demo-${leadId.slice(0, 8)}`;
-
-    const { demoUrl, wpPageId } = await cloneWordPressPage({
-      baseUrl: credentials.baseUrl,
-      username: credentials.username,
-      appPassword: credentials.appPassword,
-      sourcePageId,
-      slug,
-      replacements: {
-        businessName: leadRow.title,
-        phone: leadRow.phone ?? "",
-        industry: leadRow.industry,
-        location: leadRow.location,
-      },
+    const webhookResponse = await createDemoSite({
+      googleBusinessProfileUrl: leadRow.mapsUrl,
+      template: leadRow.industry,
     });
+
+    const demoUrl = webhookResponse.demoUrl;
 
     const [existing] = await db
       .select()
@@ -107,7 +86,6 @@ export async function POST(
         .update(proposals)
         .set({
           demoUrl,
-          wpDemoPageId: wpPageId,
           updatedAt: new Date(),
         })
         .where(eq(proposals.id, existing.id))
@@ -120,14 +98,17 @@ export async function POST(
           body: "",
           status: PROPOSAL_STATUS_IN_PROGRESS,
           demoUrl,
-          wpDemoPageId: wpPageId,
         })
         .returning();
     }
 
     return NextResponse.json({
       demoUrl,
-      wpPageId,
+      siteId: webhookResponse.siteId,
+      template: webhookResponse.template,
+      pagesFilled: webhookResponse.pagesFilled,
+      photosUploaded: webhookResponse.photosUploaded,
+      warnings: webhookResponse.warnings,
       proposal: serializeProposal(proposal),
     });
   } catch (error) {
