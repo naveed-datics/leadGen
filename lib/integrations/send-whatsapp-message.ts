@@ -15,6 +15,10 @@ export type SendWhatsAppMessageInput = {
   agentId: string;
   body: string;
   kind: WhatsAppSendKind;
+  /** When set, sends to this number instead of the lead's phone and skips
+   * qualification/dedupe/throttle checks and conversation logging. Used for
+   * test-mode sends that must not affect the lead's real proposal state. */
+  overridePhone?: string;
 };
 
 export type SendWhatsAppMessageResult = {
@@ -60,16 +64,19 @@ export async function sendWhatsAppMessageToLead(
     throw new WhatsAppSendError("Lead not found", 404);
   }
 
-  if (!lead.phone?.trim()) {
+  const isTestSend = Boolean(input.overridePhone?.trim());
+  const targetPhone = isTestSend ? input.overridePhone!.trim() : lead.phone;
+
+  if (!targetPhone?.trim()) {
     throw new WhatsAppSendError("This lead has no phone number", 400);
   }
 
-  const normalizedPhone = normalizePhoneForWhatsApp(lead.phone);
+  const normalizedPhone = normalizePhoneForWhatsApp(targetPhone);
   if (!normalizedPhone) {
     throw new WhatsAppSendError("Invalid phone number for WhatsApp", 400);
   }
 
-  if (input.kind === "proposal") {
+  if (input.kind === "proposal" && !isTestSend) {
     if (config.qualificationEnabled) {
       if (lead.hasWhatsapp !== true) {
         throw new WhatsAppSendError(
@@ -137,7 +144,7 @@ export async function sendWhatsAppMessageToLead(
     }
   }
 
-  const contact = await checkWahaContactExists(lead.phone);
+  const contact = await checkWahaContactExists(targetPhone);
   if (!contact.exists || !contact.chatId) {
     throw new WhatsAppSendError("This number is not on WhatsApp", 400);
   }
@@ -146,6 +153,10 @@ export async function sendWhatsAppMessageToLead(
     chatId: contact.chatId,
     text: proposalBody,
   });
+
+  if (isTestSend) {
+    return { conversationId: "", waMessageId };
+  }
 
   let conversationId: string;
   const [existingConv] = await db

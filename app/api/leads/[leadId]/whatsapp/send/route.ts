@@ -52,7 +52,7 @@ export async function POST(
     );
   }
 
-  let body: { body?: string };
+  let body: { body?: string; testPhone?: string };
   try {
     body = await request.json();
   } catch {
@@ -66,6 +66,8 @@ export async function POST(
       { status: 400 },
     );
   }
+
+  const testPhone = body.testPhone?.trim() || undefined;
 
   try {
     const db = getDb();
@@ -87,7 +89,10 @@ export async function POST(
       .where(eq(proposals.leadId, leadId))
       .limit(1);
 
-    if (existing?.status === "sent" || existing?.status === "replied") {
+    if (
+      !testPhone &&
+      (existing?.status === "sent" || existing?.status === "replied")
+    ) {
       return NextResponse.json(
         { error: "Proposal was already sent via WhatsApp" },
         { status: 400 },
@@ -99,7 +104,15 @@ export async function POST(
       agentId: agent.id,
       body: proposalBody,
       kind: "proposal",
+      overridePhone: testPhone,
     });
+
+    if (testPhone) {
+      return NextResponse.json({
+        proposal: existing ? serializeProposal(existing) : null,
+        whatsapp: { sent: true, test: true },
+      });
+    }
 
     const now = new Date();
     let proposal;

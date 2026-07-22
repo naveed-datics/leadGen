@@ -1,4 +1,10 @@
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const { next } = await searchParams;
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center p-6">
       <h1 className="text-2xl font-semibold">Login</h1>
@@ -6,6 +12,7 @@ export default function LoginPage() {
         Sign in to continue.
       </p>
       <form className="mt-6 space-y-4" method="post" action="/api/auth/login">
+        {next && <input type="hidden" name="next" value={next} />}
         <label className="block">
           <span className="text-sm font-medium">Email</span>
           <input

@@ -11,10 +11,18 @@ const LoginSchema = z.object({
   password: z.string().min(1),
 });
 
+function safeNextPath(next: string | null): string | null {
+  if (!next) return null;
+  if (!next.startsWith("/") || next.startsWith("//")) return null;
+  if (next.startsWith("/login")) return null;
+  return next;
+}
+
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
 
   let json: unknown;
+  let next: string | null = null;
   if (contentType.includes("application/json")) {
     try {
       json = await request.json();
@@ -33,6 +41,7 @@ export async function POST(request: Request) {
       email: String(form.get("email") ?? ""),
       password: String(form.get("password") ?? ""),
     };
+    next = safeNextPath(form.get("next") ? String(form.get("next")) : null);
   }
 
   const parsed = LoginSchema.safeParse(json);
@@ -73,13 +82,13 @@ export async function POST(request: Request) {
 
   const token = await signAuthToken({ sub: user.id, role });
 
-  // If this came from an HTML form, redirect to the appropriate dashboard.
+  // If this came from an HTML form, redirect to the original destination or the dashboard.
   const wantsRedirect =
     !contentType.includes("application/json") &&
     contentType.includes("application/x-www-form-urlencoded");
 
   const response = wantsRedirect
-    ? NextResponse.redirect(new URL(role === "admin" ? "/admin/agents" : "/agent/settings", request.url))
+    ? NextResponse.redirect(new URL(next ?? "/dashboard", request.url))
     : NextResponse.json({ ok: true });
   response.cookies.set(authCookieName(), token, {
     httpOnly: true,

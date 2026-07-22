@@ -41,7 +41,7 @@ interface ProposalModalProps {
   saving: boolean;
   onClose: () => void;
   onSave: (body: string) => Promise<ProposalSummary>;
-  onSendWhatsApp: (body: string) => Promise<void>;
+  onSendWhatsApp: (body: string, testPhone?: string) => Promise<void>;
   onDemoCreated?: (proposal: ProposalSummary) => void;
 }
 
@@ -77,6 +77,8 @@ export function ProposalModal({
   const autoDemoAttempted = useRef(false);
   const [autoSavingDraft, setAutoSavingDraft] = useState(false);
   const [autoSavedDraft, setAutoSavedDraft] = useState(false);
+  const [testMode, setTestMode] = useState(false);
+  const [testPhone, setTestPhone] = useState("");
   const readOnly = mode === "view";
 
   useEffect(() => {
@@ -311,8 +313,7 @@ export function ProposalModal({
 
   const canSend =
     whatsappConfigured &&
-    Boolean(leadPhone?.trim()) &&
-    hasWhatsapp !== false &&
+    (testMode ? testPhone.trim().length >= 8 : Boolean(leadPhone?.trim()) && hasWhatsapp !== false) &&
     Boolean(body.trim()) &&
     !readOnly &&
     !templateLoading &&
@@ -327,13 +328,19 @@ export function ProposalModal({
         ? "Creating demo site…"
         : !whatsappConfigured
           ? "Set WAHA_BASE_URL and WAHA_SESSION in .env.local and pair your WhatsApp session in WAHA"
-          : !leadPhone?.trim()
-            ? "This lead has no phone number"
-            : hasWhatsapp === false
-              ? "This number is not on WhatsApp"
+          : testMode
+            ? testPhone.trim().length < 8
+              ? "Enter a valid test WhatsApp number"
               : !body.trim()
                 ? "Write a message before sending"
-                : null;
+                : null
+            : !leadPhone?.trim()
+              ? "This lead has no phone number"
+              : hasWhatsapp === false
+                ? "This number is not on WhatsApp"
+                : !body.trim()
+                  ? "Write a message before sending"
+                  : null;
 
   return (
     <div
@@ -357,9 +364,12 @@ export function ProposalModal({
         </h2>
         <p className="mt-1 text-sm text-zinc-500">{businessName}</p>
 
-        {mode === "create" && templateLoading && (
-          <p className="mt-2 text-xs text-zinc-500">
-            Finding nearby competitors with websites…
+        {mode === "create" && (templateLoading || demoCreating) && (
+          <p className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-300 border-t-emerald-500" />
+            {templateLoading
+              ? "Step 1/2 — Creating proposal…"
+              : "Step 2/2 — Creating demo website…"}
           </p>
         )}
 
@@ -408,6 +418,29 @@ export function ProposalModal({
           </p>
         )}
 
+        {!readOnly && (
+          <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-950/50">
+            <label className="flex items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={testMode}
+                onChange={(e) => setTestMode(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-zinc-300"
+              />
+              Test mode — send to a custom WhatsApp number instead of the client
+            </label>
+            {testMode && (
+              <input
+                type="tel"
+                value={testPhone}
+                onChange={(e) => setTestPhone(e.target.value)}
+                placeholder="e.g. +1 555 123 4567"
+                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            )}
+          </div>
+        )}
+
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
             type="button"
@@ -444,12 +477,12 @@ export function ProposalModal({
               <button
                 type="button"
                 disabled={saving || !canSend}
-                onClick={() => onSendWhatsApp(body)}
+                onClick={() => onSendWhatsApp(body, testMode ? testPhone.trim() : undefined)}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
-                title={sendDisabledReason ?? "Send via WhatsApp"}
+                title={sendDisabledReason ?? (testMode ? "Send test message" : "Send via WhatsApp")}
               >
                 <WhatsAppIcon />
-                {saving ? "Sending…" : "Send via WhatsApp"}
+                {saving ? "Sending…" : testMode ? "Send test message" : "Send via WhatsApp"}
               </button>
             </>
           )}

@@ -9,20 +9,24 @@ interface LeadsTableProps {
   search: SearchDetail;
   leads: LeadWithProposal[];
   checkingWhatsapp?: boolean;
+  creatingDemoLeadId?: string | null;
   onViewBusiness: (lead: LeadWithProposal) => void;
   onCreateProposal: (lead: LeadWithProposal) => void;
   onEditProposal: (lead: LeadWithProposal) => void;
   onViewProposal: (lead: LeadWithProposal) => void;
+  onCreateDemo: (lead: LeadWithProposal) => void;
 }
 
 export function LeadsTable({
   search,
   leads,
   checkingWhatsapp = false,
+  creatingDemoLeadId = null,
   onViewBusiness,
   onCreateProposal,
   onEditProposal,
   onViewProposal,
+  onCreateDemo,
 }: LeadsTableProps) {
   if (leads.length === 0) {
     return (
@@ -104,9 +108,11 @@ export function LeadsTable({
                       </button>
                       <ProposalAction
                         lead={lead}
+                        creatingDemo={creatingDemoLeadId === lead.id}
                         onCreate={onCreateProposal}
                         onEdit={onEditProposal}
                         onView={onViewProposal}
+                        onCreateDemo={onCreateDemo}
                       />
                       {lead.proposal && isProposalReplied(lead.proposal.status) && (
                         <Link
@@ -154,9 +160,11 @@ export function LeadsTable({
                 </button>
                 <ProposalAction
                   lead={lead}
+                  creatingDemo={creatingDemoLeadId === lead.id}
                   onCreate={onCreateProposal}
                   onEdit={onEditProposal}
                   onView={onViewProposal}
+                  onCreateDemo={onCreateDemo}
                 />
                 {lead.proposal && isProposalReplied(lead.proposal.status) && (
                   <Link
@@ -175,67 +183,141 @@ export function LeadsTable({
   );
 }
 
+function ViewDemoButton({ demoUrl }: { demoUrl: string }) {
+  return (
+    <a
+      href={demoUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
+      title="Open demo site"
+    >
+      <ExternalLinkIcon />
+      View demo
+    </a>
+  );
+}
+
+function CreateDemoLink({
+  lead,
+  creatingDemo,
+  onCreateDemo,
+}: {
+  lead: LeadWithProposal;
+  creatingDemo: boolean;
+  onCreateDemo: (lead: LeadWithProposal) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onCreateDemo(lead)}
+      disabled={creatingDemo}
+      className="inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950/40"
+      title="Create demo site"
+    >
+      {creatingDemo ? "Creating demo…" : "Create demo"}
+    </button>
+  );
+}
+
 function ProposalAction({
   lead,
+  creatingDemo,
   onCreate,
   onEdit,
   onView,
+  onCreateDemo,
 }: {
   lead: LeadWithProposal;
+  creatingDemo: boolean;
   onCreate: (lead: LeadWithProposal) => void;
   onEdit: (lead: LeadWithProposal) => void;
   onView: (lead: LeadWithProposal) => void;
+  onCreateDemo: (lead: LeadWithProposal) => void;
 }) {
   if (!lead.proposal) {
     return (
-      <button
-        type="button"
-        onClick={() => onCreate(lead)}
-        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-        title="Create proposal"
-      >
-        <PlusIcon />
-        Create
-      </button>
+      <div className="flex justify-end gap-2">
+        <CreateDemoLink lead={lead} creatingDemo={creatingDemo} onCreateDemo={onCreateDemo} />
+        <button
+          type="button"
+          onClick={() => onCreate(lead)}
+          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+          title="Create proposal"
+        >
+          <PlusIcon />
+          Create
+        </button>
+      </div>
+    );
+  }
+
+  if (!lead.proposal.body?.trim() && !isProposalSent(lead.proposal.status) && !isProposalReplied(lead.proposal.status)) {
+    return (
+      <div className="flex justify-end gap-2">
+        {lead.proposal.demoUrl ? (
+          <ViewDemoButton demoUrl={lead.proposal.demoUrl} />
+        ) : (
+          <CreateDemoLink lead={lead} creatingDemo={creatingDemo} onCreateDemo={onCreateDemo} />
+        )}
+        <button
+          type="button"
+          onClick={() => onCreate(lead)}
+          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+          title="Create proposal"
+        >
+          <PlusIcon />
+          Create
+        </button>
+      </div>
     );
   }
 
   if (isProposalReplied(lead.proposal.status)) {
     return (
-      <button
-        type="button"
-        onClick={() => onView(lead)}
-        className="inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200"
-        title="View proposal"
-      >
-        <EyeIcon />
-        View proposal
-      </button>
+      <div className="flex justify-end gap-2">
+        {lead.proposal.demoUrl && <ViewDemoButton demoUrl={lead.proposal.demoUrl} />}
+        <button
+          type="button"
+          onClick={() => onView(lead)}
+          className="inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200"
+          title="View proposal"
+        >
+          <EyeIcon />
+          View proposal
+        </button>
+      </div>
     );
   }
 
   if (isProposalSent(lead.proposal.status)) {
     return (
-      <button
-        type="button"
-        onClick={() => onView(lead)}
-        className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
-        title="View proposal"
-      >
-        <EyeIcon />
-        View proposal
-      </button>
+      <div className="flex justify-end gap-2">
+        {lead.proposal.demoUrl && <ViewDemoButton demoUrl={lead.proposal.demoUrl} />}
+        <button
+          type="button"
+          onClick={() => onView(lead)}
+          className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
+          title="View proposal"
+        >
+          <EyeIcon />
+          View proposal
+        </button>
+      </div>
     );
   }
 
   return (
     <div className="flex justify-end gap-2">
+      {lead.proposal.demoUrl && <ViewDemoButton demoUrl={lead.proposal.demoUrl} />}
       <button
         type="button"
         onClick={() => onEdit(lead)}
-        className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
+        className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
+        title="View proposal"
       >
-        Edit (In progress)
+        <EyeIcon />
+        {lead.proposal.demoUrl ? "View proposal" : "Edit (In progress)"}
       </button>
     </div>
   );
@@ -276,6 +358,14 @@ function EyeIcon() {
     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+    </svg>
+  );
+}
+
+function ExternalLinkIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
     </svg>
   );
 }

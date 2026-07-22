@@ -31,6 +31,7 @@ export default function SearchDetailPage() {
   const [whatsappConfigured, setWhatsappConfigured] = useState(false);
   const whatsappCheckStarted = useRef(false);
   const [leadListMode, setLeadListMode] = useState<LeadListMode>("all");
+  const [creatingDemoLeadId, setCreatingDemoLeadId] = useState<string | null>(null);
 
   const repliedLeads = leads
     .filter((l) => l.proposal && isProposalReplied(l.proposal.status))
@@ -149,6 +150,22 @@ export default function SearchDetailPage() {
     setActiveLead((l) => (l ? { ...l, proposal } : l));
   }
 
+  async function handleCreateDemoInline(lead: LeadWithProposal) {
+    setCreatingDemoLeadId(lead.id);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/demo`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to create demo");
+      if (data.proposal) {
+        updateLeadProposal(lead.id, data.proposal);
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to create demo");
+    } finally {
+      setCreatingDemoLeadId(null);
+    }
+  }
+
   async function handleSave(body: string): Promise<ProposalSummary> {
     if (!activeLead) {
       throw new Error("No active lead selected");
@@ -173,17 +190,23 @@ export default function SearchDetailPage() {
     }
   }
 
-  async function handleSendWhatsApp(body: string) {
+  async function handleSendWhatsApp(body: string, testPhone?: string) {
     if (!activeLead) return;
     setSaving(true);
     try {
       const res = await fetch(`/api/leads/${activeLead.id}/whatsapp/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ body, testPhone }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to send WhatsApp message");
+
+      if (testPhone) {
+        alert(`Test message sent to ${testPhone}`);
+        return;
+      }
+
       updateLeadProposal(activeLead.id, data.proposal);
       setModalMode("view");
       setActiveLead((l) => (l ? { ...l, proposal: data.proposal } : l));
@@ -311,10 +334,12 @@ export default function SearchDetailPage() {
                 : leads
         }
         checkingWhatsapp={checkingWhatsapp}
+        creatingDemoLeadId={creatingDemoLeadId}
         onViewBusiness={openBusinessView}
         onCreateProposal={openCreate}
         onEditProposal={openEdit}
         onViewProposal={openView}
+        onCreateDemo={handleCreateDemoInline}
       />
 
       <BusinessDetailModal
