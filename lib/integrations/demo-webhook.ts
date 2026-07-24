@@ -379,6 +379,13 @@ export async function createDemoSite({
     >(text);
 
     if (!parsed?.ok || !parsed.leadId) {
+      console.error("[demo-webhook] unexpected initial response", {
+        status: res.status,
+        contentType: res.headers.get("content-type"),
+        contentLength: res.headers.get("content-length"),
+        bodyLength: text.length,
+        bodyPreview: text.slice(0, 500),
+      });
       const message =
         parsed?.message ||
         parsed?.error ||
