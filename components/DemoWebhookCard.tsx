@@ -109,6 +109,10 @@ export function DemoWebhookCard() {
     }
   }
 
+  const callbackUrl =
+    (typeof window !== "undefined" ? window.location.origin : "") +
+    "/api/webhooks/demo-url";
+
   if (loading) {
     return (
       <section className="mt-6 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
@@ -155,6 +159,50 @@ export function DemoWebhookCard() {
               }
             />
           </label>
+        </div>
+
+        <div className="mt-5 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+          <h3 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+            Callback webhook (for the demo builder to call back)
+          </h3>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            Once a demo site is built outside of LeadGen, have the demo
+            builder POST the finished URL back to this endpoint so it gets
+            saved against the lead&apos;s proposal automatically.
+          </p>
+
+          <dl className="mt-3 space-y-2 text-xs">
+            <div>
+              <dt className="font-medium text-zinc-600 dark:text-zinc-400">
+                Endpoint
+              </dt>
+              <dd className="mt-0.5 break-all rounded bg-zinc-100 px-2 py-1 font-mono dark:bg-zinc-800">
+                POST {callbackUrl}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-zinc-600 dark:text-zinc-400">
+                Required header
+              </dt>
+              <dd className="mt-0.5 rounded bg-zinc-100 px-2 py-1 font-mono dark:bg-zinc-800">
+                x-webhook-secret: &lt;DEMO_URL_WEBHOOK_SECRET&gt;
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-zinc-600 dark:text-zinc-400">
+                Body
+              </dt>
+              <dd className="mt-0.5 rounded bg-zinc-100 px-2 py-1 font-mono dark:bg-zinc-800">
+                {'{ "leadId": "<uuid>", "demoUrl": "<url>" }'}
+              </dd>
+            </div>
+          </dl>
+
+          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
+            The secret is set via the <code>DEMO_URL_WEBHOOK_SECRET</code>{" "}
+            environment variable on the server and is not shown here — share
+            it with the demo builder out of band.
+          </p>
         </div>
       </section>
 

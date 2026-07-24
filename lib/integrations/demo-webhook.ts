@@ -1,7 +1,10 @@
-// The demo-gen pipeline (clone site -> poll -> AI-fill every page -> brand)
-// can legitimately take minutes; the webhook itself allows up to 300s
-// (see its `maxDuration`). Give the client a little headroom beyond that.
-const REQUEST_TIMEOUT_MS = 320000;
+// POST returns quickly (202 + pollUrl). The build itself can take several
+// minutes; we poll until ready/failed within this overall budget.
+const OVERALL_TIMEOUT_MS = 600_000; // 10 min
+const POST_TIMEOUT_MS = 60_000;
+const POLL_INTERVAL_MS = 2_500;
+// One tick can include an Azure OpenAI call + Elementor write — allow headroom.
+const POLL_REQUEST_TIMEOUT_MS = 120_000;
 
 export class DemoWebhookError extends Error {
   constructor(
@@ -27,6 +30,36 @@ export type DemoWebhookResponse = {
   pagesFilled: number;
   photosUploaded: number;
   warnings: string[];
+};
+
+type DemoWebhookAccepted = {
+  ok: true;
+  accepted?: boolean;
+  leadId: string;
+  status?: string;
+  pollUrl?: string;
+  demoUrl?: string;
+  siteId?: number;
+  businessName?: string;
+  template?: DemoWebhookResponse["template"];
+  pagesFilled?: number;
+  photosUploaded?: number;
+  warnings?: string[];
+  message?: string;
+};
+
+type DemoWebhookPoll = {
+  ok?: boolean;
+  leadId?: string;
+  status?: string;
+  phase?: string;
+  progress?: string;
+  demoUrl?: string | null;
+  siteId?: number | null;
+  businessName?: string;
+  error?: string;
+  warnings?: string[];
+  message?: string;
 };
 
 export function getDemoWebhookConfig(
@@ -116,6 +149,29 @@ function buildTemplatesUrl(demoWebhookUrl: string): string {
   return `${origin}/api/webhooks/templates`;
 }
 
+function resolvePollUrl(
+  webhookUrl: string,
+  pollUrl: string | undefined,
+  leadId: string,
+): string {
+  if (pollUrl?.startsWith("http://") || pollUrl?.startsWith("https://")) {
+    return pollUrl;
+  }
+  const origin = new URL(webhookUrl).origin;
+  if (pollUrl?.startsWith("/")) {
+    return `${origin}${pollUrl}`;
+  }
+  return `${origin}/api/webhooks/demo/${leadId}`;
+}
+
+function parseJson<T>(text: string): T | null {
+  try {
+    return text ? (JSON.parse(text) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function listDemoTemplates(
   webhookConfig?: { url: string | null; apiKey: string | null } | null,
 ): Promise<DemoTemplate[]> {
@@ -142,12 +198,7 @@ export async function listDemoTemplates(
     });
 
     const text = await res.text().catch(() => "");
-    let data: { ok?: boolean; templates?: DemoTemplate[]; message?: string } = {};
-    try {
-      data = text ? JSON.parse(text) : {};
-    } catch {
-      // Non-JSON response — fall through to the generic error below.
-    }
+    const data = parseJson<{ ok?: boolean; templates?: DemoTemplate[]; message?: string }>(text) ?? {};
 
     if (!res.ok || !data.ok) {
       const status = res.status === 401 || res.status === 403 ? res.status : 502;
@@ -174,6 +225,119 @@ export async function listDemoTemplates(
   }
 }
 
+function toFinalResponse(
+  accepted: DemoWebhookAccepted,
+  poll: DemoWebhookPoll,
+): DemoWebhookResponse {
+  const demoUrl = poll.demoUrl?.trim();
+  if (!demoUrl) {
+    throw new DemoWebhookError("Demo webhook finished without a demo URL", 502);
+  }
+
+  return {
+    ok: true,
+    demoUrl,
+    siteId: poll.siteId ?? accepted.siteId ?? 0,
+    leadId: poll.leadId || accepted.leadId,
+    businessName: poll.businessName || accepted.businessName || "",
+    template: accepted.template ?? { id: 0, name: "", slug: "" },
+    pagesFilled: accepted.pagesFilled ?? 0,
+    photosUploaded: accepted.photosUploaded ?? 0,
+    warnings: poll.warnings ?? accepted.warnings ?? [],
+  };
+}
+
+async function pollUntilReady({
+  pollUrl,
+  apiKey,
+  accepted,
+  deadline,
+}: {
+  pollUrl: string;
+  apiKey: string;
+  accepted: DemoWebhookAccepted;
+  deadline: number;
+}): Promise<DemoWebhookResponse> {
+  let consecutiveTransientErrors = 0;
+
+  while (Date.now() < deadline) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Math.min(POLL_REQUEST_TIMEOUT_MS, remaining),
+    );
+
+    try {
+      const res = await fetch(pollUrl, {
+        method: "GET",
+        signal: controller.signal,
+        headers: { "X-LeadGen-API-Key": apiKey },
+        cache: "no-store",
+      });
+
+      const text = await res.text().catch(() => "");
+      const poll = parseJson<DemoWebhookPoll>(text);
+
+      if (!res.ok || !poll?.ok) {
+        const message =
+          poll?.message ||
+          poll?.error ||
+          (poll
+            ? `Demo status check failed (${res.status})`
+            : `Demo status check returned a non-JSON response (${res.status})`);
+        const status = res.status === 401 || res.status === 403 ? res.status : 502;
+        // Auth failures are final; other errors may be transient during long ticks.
+        if (status === 401 || status === 403) {
+          throw new DemoWebhookError(message, status);
+        }
+        consecutiveTransientErrors += 1;
+        if (consecutiveTransientErrors >= 5) {
+          throw new DemoWebhookError(message, status);
+        }
+      } else {
+        consecutiveTransientErrors = 0;
+
+        if (poll.status === "ready" || poll.status === "live") {
+          return toFinalResponse(accepted, poll);
+        }
+
+        if (poll.status === "failed") {
+          throw new DemoWebhookError(poll.error || poll.message || "Demo build failed", 502);
+        }
+      }
+    } catch (error) {
+      if (error instanceof DemoWebhookError) throw error;
+      // A single slow tick / network blip must not fail the whole demo —
+      // keep polling until the overall deadline.
+      if (
+        (error instanceof Error && error.name === "AbortError") ||
+        (error instanceof TypeError && /fetch failed/i.test(error.message))
+      ) {
+        consecutiveTransientErrors += 1;
+        if (consecutiveTransientErrors >= 8) {
+          throw new DemoWebhookError(
+            "Demo status checks keep timing out — the build may still be running. Try again in a minute.",
+            504,
+          );
+        }
+      } else {
+        throw error;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const sleepFor = Math.min(POLL_INTERVAL_MS, Math.max(0, deadline - Date.now()));
+    if (sleepFor <= 0) break;
+    await new Promise((r) => setTimeout(r, sleepFor));
+  }
+
+  throw new DemoWebhookError("Demo build timed out while waiting for ready status", 504);
+}
+
 export async function createDemoSite({
   googleBusinessProfileUrl,
   template,
@@ -191,8 +355,9 @@ export async function createDemoSite({
     );
   }
 
+  const deadline = Date.now() + OVERALL_TIMEOUT_MS;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const postTimeout = setTimeout(() => controller.abort(), POST_TIMEOUT_MS);
 
   try {
     const res = await fetch(config.url, {
@@ -206,16 +371,11 @@ export async function createDemoSite({
     });
 
     const text = await res.text().catch(() => "");
-    let parsed: (Partial<DemoWebhookResponse> & { message?: string; error?: string }) | null =
-      null;
-    try {
-      parsed = text ? JSON.parse(text) : null;
-    } catch {
-      // Non-JSON response (e.g. an HTML error/timeout page from a proxy) —
-      // handled by the fallback messages below.
-    }
+    const parsed = parseJson<
+      DemoWebhookAccepted & { message?: string; error?: string; ok?: boolean }
+    >(text);
 
-    if (!res.ok || !parsed?.ok) {
+    if (!parsed?.ok || !parsed.leadId) {
       const message =
         parsed?.message ||
         parsed?.error ||
@@ -226,11 +386,36 @@ export async function createDemoSite({
       throw new DemoWebhookError(message, status);
     }
 
-    if (!parsed.demoUrl) {
-      throw new DemoWebhookError("Demo webhook returned an unexpected response", 502);
+    // Async accept (202 / pollUrl) — poll until ready. Do not treat a
+    // provisional URL on the accept payload as final.
+    if (res.status === 202 || parsed.accepted || parsed.pollUrl) {
+      // Drop the POST abort timer before the long poll loop.
+      clearTimeout(postTimeout);
+      const pollUrl = resolvePollUrl(config.url, parsed.pollUrl, parsed.leadId);
+      return await pollUntilReady({
+        pollUrl,
+        apiKey: config.apiKey,
+        accepted: parsed,
+        deadline,
+      });
     }
 
-    return parsed as DemoWebhookResponse;
+    // Legacy sync response (200 + demoUrl).
+    if (parsed.demoUrl) {
+      return {
+        ok: true,
+        demoUrl: parsed.demoUrl,
+        siteId: parsed.siteId ?? 0,
+        leadId: parsed.leadId,
+        businessName: parsed.businessName || "",
+        template: parsed.template ?? { id: 0, name: "", slug: "" },
+        pagesFilled: parsed.pagesFilled ?? 0,
+        photosUploaded: parsed.photosUploaded ?? 0,
+        warnings: parsed.warnings ?? [],
+      };
+    }
+
+    throw new DemoWebhookError("Demo webhook returned an unexpected response", 502);
   } catch (error) {
     if (error instanceof DemoWebhookError) {
       throw error;
@@ -240,6 +425,6 @@ export async function createDemoSite({
     }
     throw error;
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(postTimeout);
   }
 }

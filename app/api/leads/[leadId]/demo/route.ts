@@ -8,8 +8,9 @@ import { leads, proposals, searches } from "@/lib/db/schema";
 import { createDemoSite, DemoWebhookError } from "@/lib/integrations/demo-webhook";
 import { PROPOSAL_STATUS_IN_PROGRESS } from "@/lib/proposal-status";
 
-// The demo webhook's own pipeline can take minutes (clone -> AI-fill -> brand).
-export const maxDuration = 300;
+// The demo webhook's own pipeline can take minutes (clone -> AI-fill -> brand),
+// and we now poll asynchronously within this route.
+export const maxDuration = 600;
 
 export async function POST(
   _request: Request,
