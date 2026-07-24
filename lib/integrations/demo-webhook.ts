@@ -1,10 +1,13 @@
 // POST returns quickly (202 + pollUrl). The build itself can take several
 // minutes; we poll until ready/failed within this overall budget.
-const OVERALL_TIMEOUT_MS = 600_000; // 10 min
+// Capped under the route's 300s maxDuration (Vercel Hobby plan limit) so this
+// function returns on its own instead of being force-killed mid-poll, which
+// was surfacing as a truncated/empty 200 response to the caller.
+const OVERALL_TIMEOUT_MS = 260_000; // 260s, ~40s headroom under maxDuration
 const POST_TIMEOUT_MS = 60_000;
 const POLL_INTERVAL_MS = 2_500;
 // One tick can include an Azure OpenAI call + Elementor write — allow headroom.
-const POLL_REQUEST_TIMEOUT_MS = 120_000;
+const POLL_REQUEST_TIMEOUT_MS = 60_000;
 
 export class DemoWebhookError extends Error {
   constructor(
