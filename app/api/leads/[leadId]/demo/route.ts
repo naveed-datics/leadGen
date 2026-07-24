@@ -10,7 +10,8 @@ import { PROPOSAL_STATUS_IN_PROGRESS } from "@/lib/proposal-status";
 
 // The demo webhook's own pipeline can take minutes (clone -> AI-fill -> brand),
 // and we now poll asynchronously within this route.
-export const maxDuration = 600;
+// Capped at 300 - Vercel Hobby plan's serverless function limit.
+export const maxDuration = 300;
 
 export async function POST(
   _request: Request,
