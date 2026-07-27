@@ -60,6 +60,7 @@ export async function GET(
         proposalSentAt: proposals.sentAt,
         proposalRepliedAt: proposals.repliedAt,
         proposalDemoUrl: proposals.demoUrl,
+        proposalDemoStatus: proposals.demoStatus,
       })
       .from(leads)
       .leftJoin(proposals, eq(proposals.leadId, leads.id))
@@ -104,6 +105,7 @@ export async function GET(
                   sentAt: row.proposalSentAt?.toISOString() ?? null,
                   repliedAt: row.proposalRepliedAt?.toISOString() ?? null,
                   demoUrl: row.proposalDemoUrl ?? null,
+                  demoStatus: row.proposalDemoStatus ?? "none",
                   followUps,
                   followUpLabel: formatFollowUpStatus(followUps),
                 };

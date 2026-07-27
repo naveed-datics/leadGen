@@ -91,6 +91,7 @@ export interface ProposalSummary {
   sentAt: string | null;
   repliedAt: string | null;
   demoUrl: string | null;
+  demoStatus?: "none" | "building" | "ready" | "failed";
   followUps?: ProposalFollowUpSummary[];
   followUpLabel?: string | null;
 }

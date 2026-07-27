@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { PhoneCell } from "@/components/PhoneCell";
+import {
+  DEMO_STATUS_BUILDING,
+  DEMO_STATUS_FAILED,
+} from "@/lib/demo-status";
 import { isProposalReplied, isProposalSent } from "@/lib/proposal-status";
 import type { LeadWithProposal, SearchDetail } from "@/lib/types";
 
@@ -207,15 +211,19 @@ function CreateDemoLink({
   creatingDemo: boolean;
   onCreateDemo: (lead: LeadWithProposal) => void;
 }) {
+  const building = lead.proposal?.demoStatus === DEMO_STATUS_BUILDING;
+  const failed = lead.proposal?.demoStatus === DEMO_STATUS_FAILED;
+  const busy = creatingDemo || building;
+
   return (
     <button
       type="button"
       onClick={() => onCreateDemo(lead)}
-      disabled={creatingDemo}
+      disabled={busy}
       className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950/40"
       title="Create demo site"
     >
-      {creatingDemo ? "Creating demo…" : "Create demo"}
+      {building ? "Building demo…" : creatingDemo ? "Creating demo…" : failed ? "Retry demo" : "Create demo"}
     </button>
   );
 }

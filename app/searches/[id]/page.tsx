@@ -9,6 +9,7 @@ import { ProposalModal } from "@/components/ProposalModal";
 import { ProposalSettingsModal } from "@/components/ProposalSettingsModal";
 import { ToastStack } from "@/components/Toast";
 import { isProposalInProgress, isProposalReplied, isProposalSent } from "@/lib/proposal-status";
+import { DEMO_STATUS_BUILDING, DEMO_STATUS_READY } from "@/lib/demo-status";
 import type { LeadWithProposal, ProposalSummary, SearchDetail } from "@/lib/types";
 
 type ModalMode = "create" | "edit" | "view";
@@ -61,29 +62,65 @@ export default function SearchDetailPage() {
       return bTime - aTime;
     });
 
-  const loadSearch = useCallback(async () => {
-    setLoading(true);
+  const loadSearch = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     setError(null);
     try {
-      const res = await fetch(`/api/searches/${id}`);
+      const res = await fetch(`/api/searches/${id}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Failed to load search");
-        return;
+        return null;
       }
       setSearch(data.search);
       setLeads(data.leads);
+      return data.leads as LeadWithProposal[];
     } catch {
       setError("Network error");
+      return null;
     } finally {
-      setLoading(false);
+      if (!opts?.silent) {
+        setLoading(false);
+      }
     }
   }, [id]);
 
   useEffect(() => {
     whatsappCheckStarted.current = false;
-    loadSearch();
+    void loadSearch();
   }, [loadSearch]);
+
+  const hasBuildingDemos = leads.some(
+    (l) => l.proposal?.demoStatus === DEMO_STATUS_BUILDING,
+  );
+  const prevDemoStatusRef = useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    if (!hasBuildingDemos) return;
+
+    const intervalId = window.setInterval(() => {
+      void loadSearch({ silent: true });
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [hasBuildingDemos, loadSearch]);
+
+  useEffect(() => {
+    for (const lead of leads) {
+      const prev = prevDemoStatusRef.current.get(lead.id);
+      const curr = lead.proposal?.demoStatus ?? "none";
+      if (
+        prev === DEMO_STATUS_BUILDING &&
+        curr === DEMO_STATUS_READY &&
+        lead.proposal?.demoUrl
+      ) {
+        pushToast(`Demo for ${lead.title} is ready.`, "success");
+      }
+      prevDemoStatusRef.current.set(lead.id, curr);
+    }
+  }, [leads, pushToast]);
 
   useEffect(() => {
     fetch("/api/whatsapp/status")
