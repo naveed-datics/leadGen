@@ -39,8 +39,12 @@ type DemoWebhookAccepted = {
   ok: true;
   accepted?: boolean;
   leadId: string;
+  /** demoGen internal lead id — use for status polling when present. */
+  internalLeadId?: string;
   status?: string;
   pollUrl?: string;
+  /** demoGen async status endpoint (alias of pollUrl). */
+  statusUrl?: string;
   demoUrl?: string;
   siteId?: number;
   businessName?: string;
@@ -405,12 +409,19 @@ export async function createDemoSite({
       throw new DemoWebhookError(message, status);
     }
 
-    // Async accept (202 / pollUrl) — poll until ready. Do not treat a
-    // provisional URL on the accept payload as final.
-    if (res.status === 202 || parsed.accepted || parsed.pollUrl) {
+    // Async accept (202 / pollUrl / statusUrl / in_progress) — poll until ready.
+    const asyncPollTarget = parsed.pollUrl || parsed.statusUrl;
+    const isAsyncAccept =
+      res.status === 202 ||
+      parsed.accepted ||
+      Boolean(asyncPollTarget) ||
+      parsed.status === "in_progress";
+
+    if (isAsyncAccept) {
       // Drop the POST abort timer before the long poll loop.
       clearTimeout(postTimeout);
-      const pollUrl = resolvePollUrl(config.url, parsed.pollUrl, parsed.leadId);
+      const pollLeadId = parsed.internalLeadId || parsed.leadId;
+      const pollUrl = resolvePollUrl(config.url, asyncPollTarget, pollLeadId);
       return await pollUntilReady({
         pollUrl,
         apiKey: config.apiKey,

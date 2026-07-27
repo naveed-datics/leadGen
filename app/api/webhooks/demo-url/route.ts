@@ -1,7 +1,10 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { verifySharedSecret } from "@/lib/auth/webhook-secret";
-import { getAgentDemoUrlWebhookSecret } from "@/lib/agent-settings";
+import {
+  getAgentDemoUrlWebhookSecret,
+  getAgentDemoWebhookConfig,
+} from "@/lib/agent-settings";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals, searches } from "@/lib/db/schema";
 import { PROPOSAL_STATUS_IN_PROGRESS } from "@/lib/proposal-status";
@@ -49,13 +52,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 });
     }
 
-    const agentSecret = leadRow.agentId
-      ? await getAgentDemoUrlWebhookSecret(leadRow.agentId)
-      : null;
+    const webhookSecret = request.headers.get("x-webhook-secret")?.trim() || "";
+    const apiKeyHeader = request.headers.get("x-leadgen-api-key")?.trim() || "";
 
-    const authorized = agentSecret
-      ? request.headers.get("x-webhook-secret") === agentSecret
-      : verifySharedSecret(request, "DEMO_URL_WEBHOOK_SECRET");
+    let authorized = false;
+    if (leadRow.agentId) {
+      const agentSecret = await getAgentDemoUrlWebhookSecret(leadRow.agentId);
+      const agentWebhook = await getAgentDemoWebhookConfig(leadRow.agentId);
+      authorized =
+        Boolean(agentSecret && webhookSecret && webhookSecret === agentSecret) ||
+        Boolean(
+          agentWebhook.apiKey && apiKeyHeader && apiKeyHeader === agentWebhook.apiKey,
+        );
+    }
+    if (!authorized) {
+      authorized = verifySharedSecret(request, "DEMO_URL_WEBHOOK_SECRET");
+    }
 
     if (!authorized) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
