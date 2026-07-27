@@ -5,7 +5,7 @@ import { getSearchSettings } from "@/lib/search-proposal-settings";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals, searches } from "@/lib/db/schema";
-import { createDemoSite, DemoWebhookError } from "@/lib/integrations/demo-webhook";
+import { requestDemoBuild, DemoWebhookError } from "@/lib/integrations/demo-webhook";
 import { PROPOSAL_STATUS_IN_PROGRESS } from "@/lib/proposal-status";
 import { DEMO_STATUS_BUILDING, DEMO_STATUS_FAILED, DEMO_STATUS_READY } from "@/lib/demo-status";
 
@@ -105,12 +105,36 @@ export async function POST(
 
     let webhookResponse;
     try {
-      webhookResponse = await createDemoSite({
+      const buildResult = await requestDemoBuild({
         googleBusinessProfileUrl: leadRow.mapsUrl,
         template: searchSettings.demoTemplate || leadRow.industry,
         leadId,
         webhookConfig,
       });
+
+      // Async: demoGen builds in the background and POSTs the demo URL back.
+      if ("accepted" in buildResult && buildResult.accepted) {
+        const [buildingProposal] = await db
+          .select()
+          .from(proposals)
+          .where(eq(proposals.leadId, leadId))
+          .limit(1);
+
+        return NextResponse.json(
+          {
+            accepted: true,
+            message:
+              buildResult.message ||
+              "Demo is building in the background. The demo URL will appear when the finish callback runs.",
+            proposal: buildingProposal
+              ? serializeProposal(buildingProposal)
+              : { leadId, demoStatus: DEMO_STATUS_BUILDING },
+          },
+          { status: 202 },
+        );
+      }
+
+      webhookResponse = buildResult;
     } catch (buildError) {
       await db
         .update(proposals)

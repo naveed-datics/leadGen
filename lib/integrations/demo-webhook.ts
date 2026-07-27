@@ -351,7 +351,15 @@ async function pollUntilReady({
   throw new DemoWebhookError("Demo build timed out while waiting for ready status", 504);
 }
 
-export async function createDemoSite({
+export type DemoBuildAccepted = {
+  accepted: true;
+  message?: string;
+  leadId: string;
+  statusUrl?: string;
+};
+
+/** POST to demoGen and return immediately when the build is accepted async. */
+export async function requestDemoBuild({
   googleBusinessProfileUrl,
   template,
   leadId,
@@ -359,10 +367,9 @@ export async function createDemoSite({
 }: {
   googleBusinessProfileUrl: string;
   template: string;
-  /** Consumer lead UUID — required by demoGen when a finish callback is configured. */
   leadId: string;
   webhookConfig?: { url: string | null; apiKey: string | null } | null;
-}): Promise<DemoWebhookResponse> {
+}): Promise<DemoWebhookResponse | DemoBuildAccepted> {
   const config = getDemoWebhookConfig(webhookConfig);
   if (!config) {
     throw new DemoWebhookError(
@@ -371,7 +378,6 @@ export async function createDemoSite({
     );
   }
 
-  const deadline = Date.now() + OVERALL_TIMEOUT_MS;
   const controller = new AbortController();
   const postTimeout = setTimeout(() => controller.abort(), POST_TIMEOUT_MS);
 
@@ -392,24 +398,16 @@ export async function createDemoSite({
     >(text);
 
     if (!parsed?.ok || !parsed.leadId) {
-      console.error("[demo-webhook] unexpected initial response", {
-        status: res.status,
-        contentType: res.headers.get("content-type"),
-        contentLength: res.headers.get("content-length"),
-        bodyLength: text.length,
-        bodyPreview: text.slice(0, 500),
-      });
       const message =
         parsed?.message ||
         parsed?.error ||
         (parsed
           ? `Demo webhook failed (${res.status})`
-          : `Demo webhook returned a non-JSON response (${res.status}). This usually means the request was cut off before finishing — the demo generation may still be running.`);
+          : `Demo webhook returned a non-JSON response (${res.status}).`);
       const status = res.status === 401 || res.status === 403 ? res.status : 502;
       throw new DemoWebhookError(message, status);
     }
 
-    // Async accept (202 / pollUrl / statusUrl / in_progress) — poll until ready.
     const asyncPollTarget = parsed.pollUrl || parsed.statusUrl;
     const isAsyncAccept =
       res.status === 202 ||
@@ -418,19 +416,14 @@ export async function createDemoSite({
       parsed.status === "in_progress";
 
     if (isAsyncAccept) {
-      // Drop the POST abort timer before the long poll loop.
-      clearTimeout(postTimeout);
-      const pollLeadId = parsed.internalLeadId || parsed.leadId;
-      const pollUrl = resolvePollUrl(config.url, asyncPollTarget, pollLeadId);
-      return await pollUntilReady({
-        pollUrl,
-        apiKey: config.apiKey,
-        accepted: parsed,
-        deadline,
-      });
+      return {
+        accepted: true,
+        message: parsed.message,
+        leadId: parsed.leadId,
+        statusUrl: asyncPollTarget,
+      };
     }
 
-    // Legacy sync response (200 + demoUrl).
     if (parsed.demoUrl) {
       return {
         ok: true,
@@ -445,16 +438,9 @@ export async function createDemoSite({
       };
     }
 
-    console.error("[demo-webhook] response missing accepted/pollUrl/demoUrl", {
-      status: res.status,
-      parsedKeys: Object.keys(parsed),
-      bodyPreview: text.slice(0, 500),
-    });
     throw new DemoWebhookError("Demo webhook returned an unexpected response", 502);
   } catch (error) {
-    if (error instanceof DemoWebhookError) {
-      throw error;
-    }
+    if (error instanceof DemoWebhookError) throw error;
     if (error instanceof Error && error.name === "AbortError") {
       throw new DemoWebhookError("Demo webhook request timed out", 504);
     }
@@ -462,4 +448,45 @@ export async function createDemoSite({
   } finally {
     clearTimeout(postTimeout);
   }
+}
+
+export async function createDemoSite({
+  googleBusinessProfileUrl,
+  template,
+  leadId,
+  webhookConfig,
+}: {
+  googleBusinessProfileUrl: string;
+  template: string;
+  /** Consumer lead UUID — required by demoGen when a finish callback is configured. */
+  leadId: string;
+  webhookConfig?: { url: string | null; apiKey: string | null } | null;
+}): Promise<DemoWebhookResponse> {
+  const config = getDemoWebhookConfig(webhookConfig);
+  if (!config) {
+    throw new DemoWebhookError(
+      "Demo webhook is not configured. Set the webhook URL and API key in Agent Settings.",
+      400,
+    );
+  }
+
+  const result = await requestDemoBuild({
+    googleBusinessProfileUrl,
+    template,
+    leadId,
+    webhookConfig,
+  });
+
+  if ("accepted" in result && result.accepted) {
+    const deadline = Date.now() + OVERALL_TIMEOUT_MS;
+    const pollUrl = resolvePollUrl(config.url, result.statusUrl, result.leadId);
+    return pollUntilReady({
+      pollUrl,
+      apiKey: config.apiKey,
+      accepted: { ok: true, leadId: result.leadId, message: result.message },
+      deadline,
+    });
+  }
+
+  return result;
 }

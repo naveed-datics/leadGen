@@ -217,6 +217,9 @@ export default function SearchDetailPage() {
       if (data.proposal) {
         updateLeadProposal(lead.id, data.proposal);
       }
+      if (res.status === 202 || data.accepted) {
+        return;
+      }
       pushToast(`Demo for ${lead.title} is ready.`, "success");
     } catch (e) {
       pushToast(
