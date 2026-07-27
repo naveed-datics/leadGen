@@ -108,6 +108,7 @@ export async function POST(
       webhookResponse = await createDemoSite({
         googleBusinessProfileUrl: leadRow.mapsUrl,
         template: searchSettings.demoTemplate || leadRow.industry,
+        leadId,
         webhookConfig,
       });
     } catch (buildError) {

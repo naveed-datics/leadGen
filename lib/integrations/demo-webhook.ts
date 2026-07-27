@@ -350,10 +350,13 @@ async function pollUntilReady({
 export async function createDemoSite({
   googleBusinessProfileUrl,
   template,
+  leadId,
   webhookConfig,
 }: {
   googleBusinessProfileUrl: string;
   template: string;
+  /** Consumer lead UUID — required by demoGen when a finish callback is configured. */
+  leadId: string;
   webhookConfig?: { url: string | null; apiKey: string | null } | null;
 }): Promise<DemoWebhookResponse> {
   const config = getDemoWebhookConfig(webhookConfig);
@@ -376,7 +379,7 @@ export async function createDemoSite({
         "Content-Type": "application/json",
         "X-LeadGen-API-Key": config.apiKey,
       },
-      body: JSON.stringify({ googleBusinessProfileUrl, template }),
+      body: JSON.stringify({ googleBusinessProfileUrl, template, leadId }),
     });
 
     const text = await res.text().catch(() => "");
