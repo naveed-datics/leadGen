@@ -35,7 +35,6 @@ export default function SearchDetailPage() {
   const [leadListMode, setLeadListMode] = useState<LeadListMode>("all");
   const [creatingDemoLeadId, setCreatingDemoLeadId] = useState<string | null>(null);
   const [demoEnabled, setDemoEnabled] = useState<boolean | null>(null);
-  const [demoTemplate, setDemoTemplate] = useState<string | null>(null);
   const [enablingDemo, setEnablingDemo] = useState(false);
   const [searchSettingsOpen, setSearchSettingsOpen] = useState(false);
   const [toasts, setToasts] = useState<
@@ -102,10 +101,8 @@ export default function SearchDetailPage() {
       });
       const data = await res.json();
       setDemoEnabled(Boolean(data.demoEnabled));
-      setDemoTemplate(typeof data.demoTemplate === "string" ? data.demoTemplate : null);
     } catch {
       setDemoEnabled(null);
-      setDemoTemplate(null);
     }
   }, [id]);
 
@@ -208,13 +205,9 @@ export default function SearchDetailPage() {
   }
 
   async function handleCreateDemoInline(lead: LeadWithProposal) {
-    if (!demoTemplate) {
-      alert("Select a demo template in Search settings before creating a demo.");
-      return;
-    }
     setCreatingDemoLeadId(lead.id);
     pushToast(
-      `Your demo for ${lead.title} is in progress. We'll notify you when it's ready, or check back on this search in a few minutes.`,
+      `Your demo for ${lead.title} is in progress. We'll notify you when it's ready, or check back in a few minutes.`,
       "info",
     );
     try {
@@ -427,7 +420,6 @@ export default function SearchDetailPage() {
         }
         checkingWhatsapp={checkingWhatsapp}
         creatingDemoLeadId={creatingDemoLeadId}
-        demoTemplateSelected={Boolean(demoTemplate)}
         onViewBusiness={openBusinessView}
         onCreateProposal={openCreate}
         onEditProposal={openEdit}

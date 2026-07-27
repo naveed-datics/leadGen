@@ -219,6 +219,12 @@ export async function listDemoTemplates(
     if (error instanceof Error && error.name === "AbortError") {
       throw new DemoWebhookError("Templates request timed out", 504);
     }
+    if (error instanceof TypeError && /fetch failed/i.test(error.message)) {
+      throw new DemoWebhookError(
+        `Could not reach demo templates endpoint at ${templatesUrl}. Check webhook URL host/port and ensure demoGen is running.`,
+        502,
+      );
+    }
     throw new DemoWebhookError(
       error instanceof Error ? error.message : "Failed to load templates",
       502,

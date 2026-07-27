@@ -16,7 +16,7 @@ export function PhoneCell({ phone, hasWhatsapp, checking }: PhoneCellProps) {
   const waUrl = buildWhatsAppUrl(phone);
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 whitespace-nowrap">
       <StatusIcon
         hasWhatsapp={hasWhatsapp}
         checking={checking}

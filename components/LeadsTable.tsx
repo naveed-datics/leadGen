@@ -10,7 +10,6 @@ interface LeadsTableProps {
   leads: LeadWithProposal[];
   checkingWhatsapp?: boolean;
   creatingDemoLeadId?: string | null;
-  demoTemplateSelected?: boolean;
   onViewBusiness: (lead: LeadWithProposal) => void;
   onCreateProposal: (lead: LeadWithProposal) => void;
   onEditProposal: (lead: LeadWithProposal) => void;
@@ -23,7 +22,6 @@ export function LeadsTable({
   leads,
   checkingWhatsapp = false,
   creatingDemoLeadId = null,
-  demoTemplateSelected = false,
   onViewBusiness,
   onCreateProposal,
   onEditProposal,
@@ -85,7 +83,7 @@ export function LeadsTable({
                       </p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                     <PhoneCell
                       phone={lead.phone}
                       hasWhatsapp={lead.hasWhatsapp}
@@ -94,15 +92,15 @@ export function LeadsTable({
                       }
                     />
                   </td>
-                  <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                     {formatRating(lead)}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex flex-wrap items-center justify-end gap-2">
+                    <div className="flex flex-nowrap items-center justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => onViewBusiness(lead)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
+                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
                         title="View business details"
                       >
                         <InfoIcon />
@@ -111,7 +109,6 @@ export function LeadsTable({
                       <ProposalAction
                         lead={lead}
                         creatingDemo={creatingDemoLeadId === lead.id}
-                        demoTemplateSelected={demoTemplateSelected}
                         onCreate={onCreateProposal}
                         onEdit={onEditProposal}
                         onView={onViewProposal}
@@ -120,7 +117,7 @@ export function LeadsTable({
                       {lead.proposal && isProposalReplied(lead.proposal.status) && (
                         <Link
                           href="/agent/chat"
-                          className="inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950/40"
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950/40"
                         >
                           View chat
                         </Link>
@@ -164,7 +161,6 @@ export function LeadsTable({
                 <ProposalAction
                   lead={lead}
                   creatingDemo={creatingDemoLeadId === lead.id}
-                  demoTemplateSelected={demoTemplateSelected}
                   onCreate={onCreateProposal}
                   onEdit={onEditProposal}
                   onView={onViewProposal}
@@ -193,7 +189,7 @@ function ViewDemoButton({ demoUrl }: { demoUrl: string }) {
       href={demoUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
+      className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
       title="Open demo site"
     >
       <ExternalLinkIcon />
@@ -205,21 +201,19 @@ function ViewDemoButton({ demoUrl }: { demoUrl: string }) {
 function CreateDemoLink({
   lead,
   creatingDemo,
-  demoTemplateSelected,
   onCreateDemo,
 }: {
   lead: LeadWithProposal;
   creatingDemo: boolean;
-  demoTemplateSelected: boolean;
   onCreateDemo: (lead: LeadWithProposal) => void;
 }) {
   return (
     <button
       type="button"
       onClick={() => onCreateDemo(lead)}
-      disabled={creatingDemo || !demoTemplateSelected}
-      className="inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950/40"
-      title={demoTemplateSelected ? "Create demo site" : "Select a demo template in Search settings first"}
+      disabled={creatingDemo}
+      className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950/40"
+      title="Create demo site"
     >
       {creatingDemo ? "Creating demo…" : "Create demo"}
     </button>
@@ -229,7 +223,6 @@ function CreateDemoLink({
 function ProposalAction({
   lead,
   creatingDemo,
-  demoTemplateSelected,
   onCreate,
   onEdit,
   onView,
@@ -237,7 +230,6 @@ function ProposalAction({
 }: {
   lead: LeadWithProposal;
   creatingDemo: boolean;
-  demoTemplateSelected: boolean;
   onCreate: (lead: LeadWithProposal) => void;
   onEdit: (lead: LeadWithProposal) => void;
   onView: (lead: LeadWithProposal) => void;
@@ -246,21 +238,7 @@ function ProposalAction({
   if (!lead.proposal) {
     return (
       <div className="flex justify-end gap-2">
-        <CreateDemoLink
-          lead={lead}
-          creatingDemo={creatingDemo}
-          demoTemplateSelected={demoTemplateSelected}
-          onCreateDemo={onCreateDemo}
-        />
-        <button
-          type="button"
-          onClick={() => onCreate(lead)}
-          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-          title="Create proposal"
-        >
-          <PlusIcon />
-          Create
-        </button>
+        <CreateDemoLink lead={lead} creatingDemo={creatingDemo} onCreateDemo={onCreateDemo} />
       </div>
     );
   }
@@ -269,24 +247,21 @@ function ProposalAction({
     return (
       <div className="flex justify-end gap-2">
         {lead.proposal.demoUrl ? (
-          <ViewDemoButton demoUrl={lead.proposal.demoUrl} />
+          <>
+            <ViewDemoButton demoUrl={lead.proposal.demoUrl} />
+            <button
+              type="button"
+              onClick={() => onCreate(lead)}
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+              title="Create proposal"
+            >
+              <PlusIcon />
+              Create
+            </button>
+          </>
         ) : (
-          <CreateDemoLink
-            lead={lead}
-            creatingDemo={creatingDemo}
-            demoTemplateSelected={demoTemplateSelected}
-            onCreateDemo={onCreateDemo}
-          />
+          <CreateDemoLink lead={lead} creatingDemo={creatingDemo} onCreateDemo={onCreateDemo} />
         )}
-        <button
-          type="button"
-          onClick={() => onCreate(lead)}
-          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-          title="Create proposal"
-        >
-          <PlusIcon />
-          Create
-        </button>
       </div>
     );
   }
@@ -298,7 +273,7 @@ function ProposalAction({
         <button
           type="button"
           onClick={() => onView(lead)}
-          className="inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200"
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200"
           title="View proposal"
         >
           <EyeIcon />
@@ -315,7 +290,7 @@ function ProposalAction({
         <button
           type="button"
           onClick={() => onView(lead)}
-          className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
           title="View proposal"
         >
           <EyeIcon />
@@ -331,7 +306,7 @@ function ProposalAction({
       <button
         type="button"
         onClick={() => onEdit(lead)}
-        className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
         title="View proposal"
       >
         <EyeIcon />

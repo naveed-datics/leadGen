@@ -1,9 +1,9 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals, searches } from "@/lib/db/schema";
-import { DEMO_STATUS_NONE, type DemoStatus } from "@/lib/demo-status";
+import { DEMO_STATUS_READY } from "@/lib/demo-status";
 
 export async function GET() {
   if (!process.env.DATABASE_URL) {
@@ -26,7 +26,6 @@ export async function GET() {
         proposalId: proposals.id,
         proposalStatus: proposals.status,
         demoUrl: proposals.demoUrl,
-        demoStatus: proposals.demoStatus,
         demoRequestedAt: proposals.demoRequestedAt,
         updatedAt: proposals.updatedAt,
       })
@@ -36,7 +35,7 @@ export async function GET() {
       .where(
         and(
           user.role === "agent" ? eq(searches.agentId, user.id) : undefined,
-          ne(proposals.demoStatus, DEMO_STATUS_NONE),
+          eq(proposals.demoStatus, DEMO_STATUS_READY),
         ),
       )
       .orderBy(desc(proposals.updatedAt));
@@ -50,7 +49,6 @@ export async function GET() {
         proposalId: row.proposalId,
         proposalStatus: row.proposalStatus,
         demoUrl: row.demoUrl,
-        demoStatus: row.demoStatus as DemoStatus,
         demoRequestedAt: row.demoRequestedAt?.toISOString() ?? null,
         updatedAt: row.updatedAt.toISOString(),
       })),
