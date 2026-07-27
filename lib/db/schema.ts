@@ -146,6 +146,8 @@ export const proposals = pgTable("proposals", {
   body: text("body").notNull(),
   status: text("status").notNull().default("in_progress"),
   demoUrl: text("demo_url"),
+  demoStatus: text("demo_status").notNull().default("none"), // none | building | ready | failed
+  demoRequestedAt: timestamp("demo_requested_at", { withTimezone: true }),
   wpDemoPageId: integer("wp_demo_page_id"),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   repliedAt: timestamp("replied_at", { withTimezone: true }),

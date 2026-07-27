@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db/index";
 import { leads, proposals, searches } from "@/lib/db/schema";
 import { createDemoSite, DemoWebhookError } from "@/lib/integrations/demo-webhook";
 import { PROPOSAL_STATUS_IN_PROGRESS } from "@/lib/proposal-status";
+import { DEMO_STATUS_BUILDING, DEMO_STATUS_FAILED, DEMO_STATUS_READY } from "@/lib/demo-status";
 
 // The demo webhook's own pipeline can take minutes (clone -> AI-fill -> brand),
 // and we now poll asynchronously within this route.
@@ -67,11 +68,58 @@ export async function POST(
 
     const webhookConfig = await getAgentDemoWebhookConfig(agent.id);
 
-    const webhookResponse = await createDemoSite({
-      googleBusinessProfileUrl: leadRow.mapsUrl,
-      template: searchSettings.demoTemplate || leadRow.industry,
-      webhookConfig,
-    });
+    const [existingBeforeBuild] = await db
+      .select()
+      .from(proposals)
+      .where(eq(proposals.leadId, leadId))
+      .limit(1);
+
+    if (
+      existingBeforeBuild?.status === "sent" ||
+      existingBeforeBuild?.status === "replied"
+    ) {
+      return NextResponse.json(
+        { error: "Cannot create demo for a sent proposal" },
+        { status: 400 },
+      );
+    }
+
+    if (existingBeforeBuild) {
+      await db
+        .update(proposals)
+        .set({
+          demoStatus: DEMO_STATUS_BUILDING,
+          demoRequestedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(proposals.id, existingBeforeBuild.id));
+    } else {
+      await db.insert(proposals).values({
+        leadId,
+        body: "",
+        status: PROPOSAL_STATUS_IN_PROGRESS,
+        demoStatus: DEMO_STATUS_BUILDING,
+        demoRequestedAt: new Date(),
+      });
+    }
+
+    let webhookResponse;
+    try {
+      webhookResponse = await createDemoSite({
+        googleBusinessProfileUrl: leadRow.mapsUrl,
+        template: searchSettings.demoTemplate || leadRow.industry,
+        webhookConfig,
+      });
+    } catch (buildError) {
+      await db
+        .update(proposals)
+        .set({ demoStatus: DEMO_STATUS_FAILED, updatedAt: new Date() })
+        .where(eq(proposals.leadId, leadId))
+        .catch(() => {
+          // Best-effort — do not mask the original build error.
+        });
+      throw buildError;
+    }
 
     const demoUrl = webhookResponse.demoUrl;
 
@@ -94,6 +142,7 @@ export async function POST(
         .update(proposals)
         .set({
           demoUrl,
+          demoStatus: DEMO_STATUS_READY,
           updatedAt: new Date(),
         })
         .where(eq(proposals.id, existing.id))
@@ -106,6 +155,7 @@ export async function POST(
           body: "",
           status: PROPOSAL_STATUS_IN_PROGRESS,
           demoUrl,
+          demoStatus: DEMO_STATUS_READY,
         })
         .returning();
     }

@@ -4,6 +4,7 @@ import { verifySharedSecret } from "@/lib/auth/webhook-secret";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals } from "@/lib/db/schema";
 import { PROPOSAL_STATUS_IN_PROGRESS } from "@/lib/proposal-status";
+import { DEMO_STATUS_READY } from "@/lib/demo-status";
 
 interface DemoUrlWebhookBody {
   leadId?: unknown;
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
     if (existing) {
       await db
         .update(proposals)
-        .set({ demoUrl, updatedAt: new Date() })
+        .set({ demoUrl, demoStatus: DEMO_STATUS_READY, updatedAt: new Date() })
         .where(eq(proposals.id, existing.id));
     } else {
       await db.insert(proposals).values({
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
         body: "",
         status: PROPOSAL_STATUS_IN_PROGRESS,
         demoUrl,
+        demoStatus: DEMO_STATUS_READY,
       });
     }
 

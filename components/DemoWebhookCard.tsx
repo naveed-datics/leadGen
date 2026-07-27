@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 type DemoWebhookSettings = {
@@ -203,6 +204,13 @@ export function DemoWebhookCard() {
             environment variable on the server and is not shown here — share
             it with the demo builder out of band.
           </p>
+
+          <Link
+            href="/agent/settings/demo-webhook-test"
+            className="mt-3 inline-block text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+          >
+            Test this webhook →
+          </Link>
         </div>
       </section>
 

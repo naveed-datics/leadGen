@@ -425,6 +425,11 @@ export async function createDemoSite({
       };
     }
 
+    console.error("[demo-webhook] response missing accepted/pollUrl/demoUrl", {
+      status: res.status,
+      parsedKeys: Object.keys(parsed),
+      bodyPreview: text.slice(0, 500),
+    });
     throw new DemoWebhookError("Demo webhook returned an unexpected response", 502);
   } catch (error) {
     if (error instanceof DemoWebhookError) {
