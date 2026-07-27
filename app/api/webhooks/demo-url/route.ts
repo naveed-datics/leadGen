@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { verifySharedSecret } from "@/lib/auth/webhook-secret";
+import { getAgentDemoUrlWebhookSecret } from "@/lib/agent-settings";
 import { getDb } from "@/lib/db/index";
-import { leads, proposals } from "@/lib/db/schema";
+import { leads, proposals, searches } from "@/lib/db/schema";
 import { PROPOSAL_STATUS_IN_PROGRESS } from "@/lib/proposal-status";
 import { DEMO_STATUS_READY } from "@/lib/demo-status";
 
@@ -12,10 +13,6 @@ interface DemoUrlWebhookBody {
 }
 
 export async function POST(request: Request) {
-  if (!verifySharedSecret(request, "DEMO_URL_WEBHOOK_SECRET")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   if (!process.env.DATABASE_URL) {
     return NextResponse.json(
       { error: "Database is not configured" },
@@ -42,13 +39,26 @@ export async function POST(request: Request) {
     const db = getDb();
 
     const [leadRow] = await db
-      .select({ id: leads.id })
+      .select({ id: leads.id, agentId: searches.agentId })
       .from(leads)
+      .innerJoin(searches, eq(leads.searchId, searches.id))
       .where(eq(leads.id, leadId))
       .limit(1);
 
     if (!leadRow) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+    }
+
+    const agentSecret = leadRow.agentId
+      ? await getAgentDemoUrlWebhookSecret(leadRow.agentId)
+      : null;
+
+    const authorized = agentSecret
+      ? request.headers.get("x-webhook-secret") === agentSecret
+      : verifySharedSecret(request, "DEMO_URL_WEBHOOK_SECRET");
+
+    if (!authorized) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const [existing] = await db

@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 type DemoWebhookSettings = {
   demoWebhookUrl: string | null;
   demoWebhookConfigured: boolean;
+  demoUrlWebhookSecretConfigured: boolean;
+  demoUrlWebhookSecretUsesApiKeyDefault: boolean;
 };
 
 export function DemoWebhookCard() {
@@ -17,6 +19,7 @@ export function DemoWebhookCard() {
 
   const [webhookUrl, setWebhookUrl] = useState("");
   const [webhookApiKey, setWebhookApiKey] = useState("");
+  const [callbackSecret, setCallbackSecret] = useState("");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
     reachable: boolean;
@@ -59,6 +62,7 @@ export function DemoWebhookCard() {
         body: JSON.stringify({
           demoWebhookUrl: webhookUrl.trim(),
           demoWebhookApiKey: webhookApiKey.trim() || undefined,
+          demoUrlWebhookSecret: callbackSecret.trim() || undefined,
         }),
       });
       const data = (await res.json()) as DemoWebhookSettings & {
@@ -69,6 +73,7 @@ export function DemoWebhookCard() {
 
       setSettings(data);
       setWebhookApiKey("");
+      setCallbackSecret("");
       setSuccess("Demo webhook settings saved.");
     } catch (e2) {
       setError(e2 instanceof Error ? e2.message : "Failed to save webhook settings");
@@ -186,7 +191,7 @@ export function DemoWebhookCard() {
                 Required header
               </dt>
               <dd className="mt-0.5 rounded bg-zinc-100 px-2 py-1 font-mono dark:bg-zinc-800">
-                x-webhook-secret: &lt;DEMO_URL_WEBHOOK_SECRET&gt;
+                x-webhook-secret: &lt;your callback secret below&gt;
               </dd>
             </div>
             <div>
@@ -199,10 +204,30 @@ export function DemoWebhookCard() {
             </div>
           </dl>
 
+          <label className="mt-3 block">
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              Callback secret
+            </span>
+            <input
+              type="password"
+              value={callbackSecret}
+              onChange={(e) => setCallbackSecret(e.target.value)}
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+              placeholder={
+                settings?.demoUrlWebhookSecretConfigured
+                  ? "•••••••• (set a new secret)"
+                  : settings?.demoUrlWebhookSecretUsesApiKeyDefault
+                    ? "defaults to your API key above"
+                    : "set a callback secret"
+              }
+            />
+          </label>
           <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
-            The secret is set via the <code>DEMO_URL_WEBHOOK_SECRET</code>{" "}
-            environment variable on the server and is not shown here — share
-            it with the demo builder out of band.
+            {settings?.demoUrlWebhookSecretUsesApiKeyDefault
+              ? "Currently using your API key above as the callback secret. Set a value here only if the demo builder should use a different secret for callbacks."
+              : "Share this secret with the demo builder out of band."}{" "}
+            It must send it back as the <code>x-webhook-secret</code> header
+            on every callback.
           </p>
 
           <Link

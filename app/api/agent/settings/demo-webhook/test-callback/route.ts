@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
+import { getAgentDemoUrlWebhookSecret } from "@/lib/agent-settings";
 
 interface TestCallbackBody {
   leadId?: unknown;
@@ -8,16 +9,19 @@ interface TestCallbackBody {
 
 /**
  * Session-authed proxy so agents can test the inbound demo-url webhook from
- * the settings UI without the DEMO_URL_WEBHOOK_SECRET ever reaching the browser.
+ * the settings UI without the callback secret ever reaching the browser.
  */
 export async function POST(request: Request) {
   try {
-    await requireActiveAgent();
+    const agent = await requireActiveAgent();
 
-    const secret = process.env.DEMO_URL_WEBHOOK_SECRET?.trim();
+    const secret =
+      (await getAgentDemoUrlWebhookSecret(agent.id)) ??
+      process.env.DEMO_URL_WEBHOOK_SECRET?.trim() ??
+      null;
     if (!secret) {
       return NextResponse.json(
-        { error: "DEMO_URL_WEBHOOK_SECRET is not configured on the server." },
+        { error: "No callback secret configured. Set one in Demo webhook settings." },
         { status: 500 },
       );
     }

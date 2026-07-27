@@ -34,6 +34,7 @@ export const users = pgTable("users", {
   defaultDemoPageId: integer("default_demo_page_id"),
   demoWebhookUrl: text("demo_webhook_url"),
   demoWebhookApiKeyEnc: text("demo_webhook_api_key_enc"),
+  demoUrlWebhookSecretEnc: text("demo_url_webhook_secret_enc"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

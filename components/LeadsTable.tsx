@@ -10,6 +10,7 @@ interface LeadsTableProps {
   leads: LeadWithProposal[];
   checkingWhatsapp?: boolean;
   creatingDemoLeadId?: string | null;
+  demoTemplateSelected?: boolean;
   onViewBusiness: (lead: LeadWithProposal) => void;
   onCreateProposal: (lead: LeadWithProposal) => void;
   onEditProposal: (lead: LeadWithProposal) => void;
@@ -22,6 +23,7 @@ export function LeadsTable({
   leads,
   checkingWhatsapp = false,
   creatingDemoLeadId = null,
+  demoTemplateSelected = false,
   onViewBusiness,
   onCreateProposal,
   onEditProposal,
@@ -109,6 +111,7 @@ export function LeadsTable({
                       <ProposalAction
                         lead={lead}
                         creatingDemo={creatingDemoLeadId === lead.id}
+                        demoTemplateSelected={demoTemplateSelected}
                         onCreate={onCreateProposal}
                         onEdit={onEditProposal}
                         onView={onViewProposal}
@@ -161,6 +164,7 @@ export function LeadsTable({
                 <ProposalAction
                   lead={lead}
                   creatingDemo={creatingDemoLeadId === lead.id}
+                  demoTemplateSelected={demoTemplateSelected}
                   onCreate={onCreateProposal}
                   onEdit={onEditProposal}
                   onView={onViewProposal}
@@ -201,19 +205,21 @@ function ViewDemoButton({ demoUrl }: { demoUrl: string }) {
 function CreateDemoLink({
   lead,
   creatingDemo,
+  demoTemplateSelected,
   onCreateDemo,
 }: {
   lead: LeadWithProposal;
   creatingDemo: boolean;
+  demoTemplateSelected: boolean;
   onCreateDemo: (lead: LeadWithProposal) => void;
 }) {
   return (
     <button
       type="button"
       onClick={() => onCreateDemo(lead)}
-      disabled={creatingDemo}
+      disabled={creatingDemo || !demoTemplateSelected}
       className="inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950/40"
-      title="Create demo site"
+      title={demoTemplateSelected ? "Create demo site" : "Select a demo template in Search settings first"}
     >
       {creatingDemo ? "Creating demo…" : "Create demo"}
     </button>
@@ -223,6 +229,7 @@ function CreateDemoLink({
 function ProposalAction({
   lead,
   creatingDemo,
+  demoTemplateSelected,
   onCreate,
   onEdit,
   onView,
@@ -230,6 +237,7 @@ function ProposalAction({
 }: {
   lead: LeadWithProposal;
   creatingDemo: boolean;
+  demoTemplateSelected: boolean;
   onCreate: (lead: LeadWithProposal) => void;
   onEdit: (lead: LeadWithProposal) => void;
   onView: (lead: LeadWithProposal) => void;
@@ -238,7 +246,12 @@ function ProposalAction({
   if (!lead.proposal) {
     return (
       <div className="flex justify-end gap-2">
-        <CreateDemoLink lead={lead} creatingDemo={creatingDemo} onCreateDemo={onCreateDemo} />
+        <CreateDemoLink
+          lead={lead}
+          creatingDemo={creatingDemo}
+          demoTemplateSelected={demoTemplateSelected}
+          onCreateDemo={onCreateDemo}
+        />
         <button
           type="button"
           onClick={() => onCreate(lead)}
@@ -258,7 +271,12 @@ function ProposalAction({
         {lead.proposal.demoUrl ? (
           <ViewDemoButton demoUrl={lead.proposal.demoUrl} />
         ) : (
-          <CreateDemoLink lead={lead} creatingDemo={creatingDemo} onCreateDemo={onCreateDemo} />
+          <CreateDemoLink
+            lead={lead}
+            creatingDemo={creatingDemo}
+            demoTemplateSelected={demoTemplateSelected}
+            onCreateDemo={onCreateDemo}
+          />
         )}
         <button
           type="button"

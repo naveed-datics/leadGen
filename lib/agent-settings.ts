@@ -101,6 +101,34 @@ export async function getAgentDemoWebhookConfig(
   };
 }
 
+/**
+ * Callback secret an agent expects on inbound POSTs to /api/webhooks/demo-url.
+ * Defaults to the agent's demo webhook API key when no explicit callback
+ * secret has been set, so agents only need to configure one value unless
+ * they want the callback secret to differ from the outbound API key.
+ */
+export async function getAgentDemoUrlWebhookSecret(
+  agentId: string,
+): Promise<string | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      demoUrlWebhookSecretEnc: users.demoUrlWebhookSecretEnc,
+      demoWebhookApiKeyEnc: users.demoWebhookApiKeyEnc,
+    })
+    .from(users)
+    .where(eq(users.id, agentId))
+    .limit(1);
+
+  if (row?.demoUrlWebhookSecretEnc) {
+    return decryptSecret(row.demoUrlWebhookSecretEnc);
+  }
+  if (row?.demoWebhookApiKeyEnc) {
+    return decryptSecret(row.demoWebhookApiKeyEnc);
+  }
+  return null;
+}
+
 export function serializeProposal(proposal: {
   id: string;
   status: string;

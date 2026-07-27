@@ -7,6 +7,7 @@ import { BusinessDetailModal } from "@/components/BusinessDetailModal";
 import { LeadsTable } from "@/components/LeadsTable";
 import { ProposalModal } from "@/components/ProposalModal";
 import { ProposalSettingsModal } from "@/components/ProposalSettingsModal";
+import { ToastStack } from "@/components/Toast";
 import { isProposalInProgress, isProposalReplied, isProposalSent } from "@/lib/proposal-status";
 import type { LeadWithProposal, ProposalSummary, SearchDetail } from "@/lib/types";
 
@@ -34,8 +35,24 @@ export default function SearchDetailPage() {
   const [leadListMode, setLeadListMode] = useState<LeadListMode>("all");
   const [creatingDemoLeadId, setCreatingDemoLeadId] = useState<string | null>(null);
   const [demoEnabled, setDemoEnabled] = useState<boolean | null>(null);
+  const [demoTemplate, setDemoTemplate] = useState<string | null>(null);
   const [enablingDemo, setEnablingDemo] = useState(false);
   const [searchSettingsOpen, setSearchSettingsOpen] = useState(false);
+  const [toasts, setToasts] = useState<
+    { id: string; message: string; variant?: "info" | "success" | "error" }[]
+  >([]);
+
+  const pushToast = useCallback(
+    (message: string, variant?: "info" | "success" | "error") => {
+      const id = crypto.randomUUID();
+      setToasts((prev) => [...prev, { id, message, variant }]);
+    },
+    [],
+  );
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const repliedLeads = leads
     .filter((l) => l.proposal && isProposalReplied(l.proposal.status))
@@ -85,8 +102,10 @@ export default function SearchDetailPage() {
       });
       const data = await res.json();
       setDemoEnabled(Boolean(data.demoEnabled));
+      setDemoTemplate(typeof data.demoTemplate === "string" ? data.demoTemplate : null);
     } catch {
       setDemoEnabled(null);
+      setDemoTemplate(null);
     }
   }, [id]);
 
@@ -189,7 +208,15 @@ export default function SearchDetailPage() {
   }
 
   async function handleCreateDemoInline(lead: LeadWithProposal) {
+    if (!demoTemplate) {
+      alert("Select a demo template in Search settings before creating a demo.");
+      return;
+    }
     setCreatingDemoLeadId(lead.id);
+    pushToast(
+      `Your demo for ${lead.title} is in progress. We'll notify you when it's ready, or check back on this search in a few minutes.`,
+      "info",
+    );
     try {
       const res = await fetch(`/api/leads/${lead.id}/demo`, { method: "POST" });
       const data = await res.json();
@@ -197,8 +224,12 @@ export default function SearchDetailPage() {
       if (data.proposal) {
         updateLeadProposal(lead.id, data.proposal);
       }
+      pushToast(`Demo for ${lead.title} is ready.`, "success");
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to create demo");
+      pushToast(
+        e instanceof Error ? e.message : "Failed to create demo",
+        "error",
+      );
     } finally {
       setCreatingDemoLeadId(null);
     }
@@ -396,6 +427,7 @@ export default function SearchDetailPage() {
         }
         checkingWhatsapp={checkingWhatsapp}
         creatingDemoLeadId={creatingDemoLeadId}
+        demoTemplateSelected={Boolean(demoTemplate)}
         onViewBusiness={openBusinessView}
         onCreateProposal={openCreate}
         onEditProposal={openEdit}
@@ -441,6 +473,8 @@ export default function SearchDetailPage() {
           onDemoCreated={handleDemoCreated}
         />
       )}
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </main>
   );
 }

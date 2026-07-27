@@ -14,6 +14,7 @@ export async function GET() {
       .select({
         demoWebhookUrl: users.demoWebhookUrl,
         demoWebhookApiKeyEnc: users.demoWebhookApiKeyEnc,
+        demoUrlWebhookSecretEnc: users.demoUrlWebhookSecretEnc,
       })
       .from(users)
       .where(eq(users.id, agent.id))
@@ -22,6 +23,9 @@ export async function GET() {
     return NextResponse.json({
       demoWebhookUrl: row?.demoWebhookUrl ?? null,
       demoWebhookConfigured: Boolean(row?.demoWebhookApiKeyEnc),
+      demoUrlWebhookSecretConfigured: Boolean(row?.demoUrlWebhookSecretEnc),
+      demoUrlWebhookSecretUsesApiKeyDefault:
+        !row?.demoUrlWebhookSecretEnc && Boolean(row?.demoWebhookApiKeyEnc),
     });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -36,6 +40,7 @@ export async function GET() {
 const PutSchema = z.object({
   demoWebhookUrl: z.string().optional(),
   demoWebhookApiKey: z.string().optional(),
+  demoUrlWebhookSecret: z.string().optional(),
 });
 
 export async function PUT(request: Request) {
@@ -73,6 +78,10 @@ export async function PUT(request: Request) {
       patch.demoWebhookApiKeyEnc = encryptSecret(parsed.data.demoWebhookApiKey);
     }
 
+    if (parsed.data.demoUrlWebhookSecret?.trim()) {
+      patch.demoUrlWebhookSecretEnc = encryptSecret(parsed.data.demoUrlWebhookSecret);
+    }
+
     const db = getDb();
     const [updated] = await db
       .update(users)
@@ -81,12 +90,16 @@ export async function PUT(request: Request) {
       .returning({
         demoWebhookUrl: users.demoWebhookUrl,
         demoWebhookApiKeyEnc: users.demoWebhookApiKeyEnc,
+        demoUrlWebhookSecretEnc: users.demoUrlWebhookSecretEnc,
       });
 
     return NextResponse.json({
       ok: true,
       demoWebhookUrl: updated.demoWebhookUrl,
       demoWebhookConfigured: Boolean(updated.demoWebhookApiKeyEnc),
+      demoUrlWebhookSecretConfigured: Boolean(updated.demoUrlWebhookSecretEnc),
+      demoUrlWebhookSecretUsesApiKeyDefault:
+        !updated.demoUrlWebhookSecretEnc && Boolean(updated.demoWebhookApiKeyEnc),
     });
   } catch (error) {
     if (error instanceof AuthError) {
