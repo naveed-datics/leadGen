@@ -358,6 +358,12 @@ export type DemoBuildAccepted = {
   statusUrl?: string;
 };
 
+export function isDemoBuildAccepted(
+  result: DemoWebhookResponse | DemoBuildAccepted,
+): result is DemoBuildAccepted {
+  return "accepted" in result && result.accepted === true;
+}
+
 /** POST to demoGen and return immediately when the build is accepted async. */
 export async function requestDemoBuild({
   googleBusinessProfileUrl,
@@ -477,7 +483,7 @@ export async function createDemoSite({
     webhookConfig,
   });
 
-  if ("accepted" in result && result.accepted) {
+  if (isDemoBuildAccepted(result)) {
     const deadline = Date.now() + OVERALL_TIMEOUT_MS;
     const pollUrl = resolvePollUrl(config.url, result.statusUrl, result.leadId);
     return pollUntilReady({

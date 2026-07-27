@@ -5,7 +5,12 @@ import { getSearchSettings } from "@/lib/search-proposal-settings";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals, searches } from "@/lib/db/schema";
-import { requestDemoBuild, DemoWebhookError } from "@/lib/integrations/demo-webhook";
+import {
+  requestDemoBuild,
+  DemoWebhookError,
+  isDemoBuildAccepted,
+  type DemoWebhookResponse,
+} from "@/lib/integrations/demo-webhook";
 import { PROPOSAL_STATUS_IN_PROGRESS } from "@/lib/proposal-status";
 import { DEMO_STATUS_BUILDING, DEMO_STATUS_FAILED, DEMO_STATUS_READY } from "@/lib/demo-status";
 
@@ -103,38 +108,14 @@ export async function POST(
       });
     }
 
-    let webhookResponse;
+    let buildResult: DemoWebhookResponse | Awaited<ReturnType<typeof requestDemoBuild>>;
     try {
-      const buildResult = await requestDemoBuild({
+      buildResult = await requestDemoBuild({
         googleBusinessProfileUrl: leadRow.mapsUrl,
         template: searchSettings.demoTemplate || leadRow.industry,
         leadId,
         webhookConfig,
       });
-
-      // Async: demoGen builds in the background and POSTs the demo URL back.
-      if ("accepted" in buildResult && buildResult.accepted) {
-        const [buildingProposal] = await db
-          .select()
-          .from(proposals)
-          .where(eq(proposals.leadId, leadId))
-          .limit(1);
-
-        return NextResponse.json(
-          {
-            accepted: true,
-            message:
-              buildResult.message ||
-              "Demo is building in the background. The demo URL will appear when the finish callback runs.",
-            proposal: buildingProposal
-              ? serializeProposal(buildingProposal)
-              : { leadId, demoStatus: DEMO_STATUS_BUILDING },
-          },
-          { status: 202 },
-        );
-      }
-
-      webhookResponse = buildResult;
     } catch (buildError) {
       await db
         .update(proposals)
@@ -145,6 +126,30 @@ export async function POST(
         });
       throw buildError;
     }
+
+    // Async: demoGen builds in the background and POSTs the demo URL back.
+    if (isDemoBuildAccepted(buildResult)) {
+      const [buildingProposal] = await db
+        .select()
+        .from(proposals)
+        .where(eq(proposals.leadId, leadId))
+        .limit(1);
+
+      return NextResponse.json(
+        {
+          accepted: true,
+          message:
+            buildResult.message ||
+            "Demo is building in the background. The demo URL will appear when the finish callback runs.",
+          proposal: buildingProposal
+            ? serializeProposal(buildingProposal)
+            : { leadId, demoStatus: DEMO_STATUS_BUILDING },
+        },
+        { status: 202 },
+      );
+    }
+
+    const webhookResponse: DemoWebhookResponse = buildResult;
 
     const demoUrl = webhookResponse.demoUrl;
 
