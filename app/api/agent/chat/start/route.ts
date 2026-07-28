@@ -9,6 +9,7 @@ import {
   isWahaConfigured,
   sendWahaTextMessage,
 } from "@/lib/integrations/waha";
+import { optionalCustomerChatId } from "@/lib/integrations/customer-chat-id-column";
 import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
 
 const BodySchema = z.object({
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
       text,
     });
 
+    const chatIdFields = await optionalCustomerChatId(contact.chatId);
     const db = getDb();
 
     const [existingConv] = await db
@@ -118,7 +120,7 @@ export async function POST(request: Request) {
           lastMessageAt: now,
           displayName: businessName,
           industry,
-          customerChatId: contact.chatId,
+          ...chatIdFields,
         })
         .where(eq(whatsappConversations.id, conversationId));
     } else {
@@ -127,10 +129,10 @@ export async function POST(request: Request) {
         .values({
           agentId: agent.id,
           customerPhone: normalizedPhone,
-          customerChatId: contact.chatId,
           displayName: businessName,
           industry,
           lastMessageAt: now,
+          ...chatIdFields,
         })
         .returning({ id: whatsappConversations.id });
       conversationId = created.id;

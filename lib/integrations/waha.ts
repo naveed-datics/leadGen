@@ -114,6 +114,42 @@ export async function sendWahaTextMessage(input: {
   return { waMessageId };
 }
 
+export type WahaChatHistoryMessage = {
+  id?: string;
+  timestamp?: number;
+  from?: string;
+  fromMe?: boolean;
+  body?: string;
+  hasMedia?: boolean;
+};
+
+/** Pull recent messages from WAHA for a chat (used to recover missed webhooks). */
+export async function fetchWahaChatMessages(input: {
+  chatId: string;
+  limit?: number;
+}): Promise<WahaChatHistoryMessage[]> {
+  const session = getWahaSession();
+  const limit = input.limit ?? 50;
+  const params = new URLSearchParams({
+    limit: String(limit),
+    downloadMedia: "false",
+  });
+
+  const response = await wahaFetch(
+    `/api/${encodeURIComponent(session)}/chats/${encodeURIComponent(input.chatId)}/messages?${params}`,
+  );
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `WAHA get messages failed (${response.status}): ${text || response.statusText}`,
+    );
+  }
+
+  const data = (await response.json().catch(() => null)) as unknown;
+  if (!Array.isArray(data)) return [];
+  return data as WahaChatHistoryMessage[];
+}
+
 type WahaLidLookupResponse = {
   lid?: string;
   pn?: string | null;

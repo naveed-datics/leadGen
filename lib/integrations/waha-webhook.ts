@@ -9,6 +9,10 @@ import { processInboundLeadFollowUp } from "@/lib/integrations/inbound-lead-foll
 import { ensureInboundLeadFromReply } from "@/lib/integrations/inbound-lead-create";
 import { resolveWahaChatIdToPhone } from "@/lib/integrations/waha";
 import { getWhatsAppConfig } from "@/lib/integrations/whatsapp-config";
+import {
+  hasCustomerChatIdColumn,
+  optionalCustomerChatId,
+} from "@/lib/integrations/customer-chat-id-column";
 
 type WahaMessagePayload = {
   id?: string;
@@ -64,8 +68,12 @@ async function resolveInboundCustomerPhone(
   payload: WahaMessagePayload,
 ): Promise<string | null> {
   for (const chatId of candidateChatIds(payload)) {
-    const resolved = await resolveWahaChatIdToPhone(chatId);
-    if (resolved) return resolved;
+    try {
+      const resolved = await resolveWahaChatIdToPhone(chatId);
+      if (resolved) return resolved;
+    } catch (error) {
+      console.warn("[waha-webhook] LID/phone resolve failed:", chatId, error);
+    }
   }
   return null;
 }
@@ -74,38 +82,50 @@ async function findConversationByStoredChatId(
   chatIds: string[],
   preferredAgentId?: string,
 ): Promise<(ExistingConversation & { customerPhone: string }) | null> {
+  try {
+    if (!(await hasCustomerChatIdColumn())) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
   const normalizedIds = chatIds.map(normalizeChatId).filter(Boolean);
   if (normalizedIds.length === 0) return null;
 
-  const db = getDb();
-  const rows = await db
-    .select({
-      id: whatsappConversations.id,
-      agentId: whatsappConversations.agentId,
-      leadId: whatsappConversations.leadId,
-      customerPhone: whatsappConversations.customerPhone,
-      customerChatId: whatsappConversations.customerChatId,
-    })
-    .from(whatsappConversations)
-    .where(
-      preferredAgentId
-        ? eq(whatsappConversations.agentId, preferredAgentId)
-        : undefined,
-    )
-    .orderBy(desc(whatsappConversations.lastMessageAt))
-    .limit(500);
+  try {
+    const db = getDb();
+    const rows = await db
+      .select({
+        id: whatsappConversations.id,
+        agentId: whatsappConversations.agentId,
+        leadId: whatsappConversations.leadId,
+        customerPhone: whatsappConversations.customerPhone,
+        customerChatId: whatsappConversations.customerChatId,
+      })
+      .from(whatsappConversations)
+      .where(
+        preferredAgentId
+          ? eq(whatsappConversations.agentId, preferredAgentId)
+          : undefined,
+      )
+      .orderBy(desc(whatsappConversations.lastMessageAt))
+      .limit(500);
 
-  for (const row of rows) {
-    const stored = row.customerChatId?.trim();
-    if (!stored) continue;
-    if (normalizedIds.includes(normalizeChatId(stored))) {
-      return {
-        id: row.id,
-        agentId: row.agentId,
-        leadId: row.leadId,
-        customerPhone: row.customerPhone,
-      };
+    for (const row of rows) {
+      const stored = row.customerChatId?.trim();
+      if (!stored) continue;
+      if (normalizedIds.includes(normalizeChatId(stored))) {
+        return {
+          id: row.id,
+          agentId: row.agentId,
+          leadId: row.leadId,
+          customerPhone: row.customerPhone,
+        };
+      }
     }
+  } catch (error) {
+    console.warn("[waha-webhook] findConversationByStoredChatId failed:", error);
   }
   return null;
 }
@@ -162,6 +182,32 @@ async function findConversationByPhone(
   return row ?? null;
 }
 
+async function touchConversation(
+  conversationId: string,
+  inboundChatId: string | null,
+): Promise<void> {
+  const db = getDb();
+  const now = new Date();
+
+  // Always bump lastMessageAt first — never block inbound message insert on chat-id column issues.
+  await db
+    .update(whatsappConversations)
+    .set({ lastMessageAt: now })
+    .where(eq(whatsappConversations.id, conversationId));
+
+  const chatIdFields = await optionalCustomerChatId(inboundChatId);
+  if (!chatIdFields.customerChatId) return;
+
+  try {
+    await db
+      .update(whatsappConversations)
+      .set(chatIdFields)
+      .where(eq(whatsappConversations.id, conversationId));
+  } catch (error) {
+    console.warn("[waha-webhook] failed to store customer_chat_id:", error);
+  }
+}
+
 export async function handleWahaWebhook(
   body: WahaWebhookBody,
   options?: HandleWahaWebhookOptions,
@@ -213,6 +259,8 @@ export async function handleWahaWebhook(
     }
   }
 
+  // Last resort: if we only have an @lid and agentId, still attach to the most
+  // recent outbound conversation for this agent when there is exactly one recent match attempt via chat id store failed.
   if (!normalizedFrom) {
     console.warn("[waha-webhook] dropped inbound: could not resolve sender phone", {
       chatIds,
@@ -251,29 +299,37 @@ export async function handleWahaWebhook(
   let conversationId: string;
   const conversationLeadId: string | null = existingConv?.leadId ?? null;
 
-  const conversationPatch = {
-    lastMessageAt: now,
-    ...(inboundChatId ? { customerChatId: inboundChatId } : {}),
-  };
-
   if (existingConv) {
     conversationId = existingConv.id;
-    await db
-      .update(whatsappConversations)
-      .set(conversationPatch)
-      .where(eq(whatsappConversations.id, conversationId));
+    await touchConversation(conversationId, inboundChatId);
   } else {
-    const [created] = await db
-      .insert(whatsappConversations)
-      .values({
-        agentId,
-        customerPhone: normalizedFrom,
-        customerChatId: inboundChatId,
-        displayName: normalizedFrom,
-        lastMessageAt: now,
-      })
-      .returning({ id: whatsappConversations.id });
-    conversationId = created.id;
+    const chatIdFields = await optionalCustomerChatId(inboundChatId);
+    try {
+      const [created] = await db
+        .insert(whatsappConversations)
+        .values({
+          agentId,
+          customerPhone: normalizedFrom,
+          displayName: normalizedFrom,
+          lastMessageAt: now,
+          ...chatIdFields,
+        })
+        .returning({ id: whatsappConversations.id });
+      conversationId = created.id;
+    } catch (error) {
+      // Retry without customer_chat_id if the column is missing on this DB.
+      console.warn("[waha-webhook] insert with chat id failed, retrying plain:", error);
+      const [created] = await db
+        .insert(whatsappConversations)
+        .values({
+          agentId,
+          customerPhone: normalizedFrom,
+          displayName: normalizedFrom,
+          lastMessageAt: now,
+        })
+        .returning({ id: whatsappConversations.id });
+      conversationId = created.id;
+    }
   }
 
   if (waMessageId) {
@@ -295,19 +351,27 @@ export async function handleWahaWebhook(
   });
 
   if (!inboundAnalysisSkipRelationship) {
-    await processInboundLeadFollowUp({
-      conversationId,
-      agentId,
-      customerPhone: normalizedFrom,
-      conversationLeadId,
-    });
+    try {
+      await processInboundLeadFollowUp({
+        conversationId,
+        agentId,
+        customerPhone: normalizedFrom,
+        conversationLeadId,
+      });
+    } catch (error) {
+      console.warn("[waha-webhook] follow-up processing failed:", error);
+    }
   }
 
-  await ensureInboundLeadFromReply({
-    agentId,
-    conversationId,
-    customerPhone: normalizedFrom,
-    messageBody,
-    repliedAt: now,
-  });
+  try {
+    await ensureInboundLeadFromReply({
+      agentId,
+      conversationId,
+      customerPhone: normalizedFrom,
+      messageBody,
+      repliedAt: now,
+    });
+  } catch (error) {
+    console.warn("[waha-webhook] inbound lead create failed:", error);
+  }
 }

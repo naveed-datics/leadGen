@@ -9,6 +9,8 @@ import {
   isWahaConfigured,
   sendWahaTextMessage,
 } from "@/lib/integrations/waha";
+import { optionalCustomerChatId } from "@/lib/integrations/customer-chat-id-column";
+import { syncConversationMessagesFromWaha } from "@/lib/integrations/sync-waha-chat-messages";
 
 const ReplyBodySchema = z.object({
   text: z.string().min(1),
@@ -31,6 +33,16 @@ export async function GET(
 
     if (!conv) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+    }
+
+    // Recover inbound replies that arrived on WhatsApp but missed the webhook.
+    try {
+      await syncConversationMessagesFromWaha({
+        conversationId: id,
+        agentId: agent.id,
+      });
+    } catch (error) {
+      console.warn("[chat] WAHA history sync failed:", error);
     }
 
     const rows = await db
@@ -146,10 +158,11 @@ export async function POST(
     });
 
     const now = new Date();
+    const chatIdFields = await optionalCustomerChatId(contact.chatId);
 
     await db
       .update(whatsappConversations)
-      .set({ lastMessageAt: now, customerChatId: contact.chatId })
+      .set({ lastMessageAt: now, ...chatIdFields })
       .where(eq(whatsappConversations.id, conv.id));
 
     const [message] = await db

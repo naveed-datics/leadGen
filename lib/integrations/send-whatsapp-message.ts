@@ -5,6 +5,7 @@ import {
   checkWahaContactExists,
   sendWahaTextMessage,
 } from "@/lib/integrations/waha";
+import { optionalCustomerChatId } from "@/lib/integrations/customer-chat-id-column";
 import { getWhatsAppConfig } from "@/lib/integrations/whatsapp-config";
 import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
 
@@ -158,6 +159,8 @@ export async function sendWhatsAppMessageToLead(
     return { conversationId: "", waMessageId };
   }
 
+  const chatIdFields = await optionalCustomerChatId(contact.chatId);
+
   let conversationId: string;
   const [existingConv] = await db
     .select({ id: whatsappConversations.id })
@@ -173,7 +176,7 @@ export async function sendWhatsAppMessageToLead(
         lastMessageAt: new Date(),
         displayName: lead.title,
         industry: lead.industry,
-        customerChatId: contact.chatId,
+        ...chatIdFields,
       })
       .where(eq(whatsappConversations.id, conversationId));
   } else {
@@ -196,7 +199,7 @@ export async function sendWhatsAppMessageToLead(
           lastMessageAt: new Date(),
           displayName: lead.title,
           industry: lead.industry,
-          customerChatId: contact.chatId,
+          ...chatIdFields,
           leadId: input.leadId,
         })
         .where(eq(whatsappConversations.id, conversationId));
@@ -207,9 +210,9 @@ export async function sendWhatsAppMessageToLead(
           agentId: input.agentId,
           leadId: input.leadId,
           customerPhone: normalizedPhone,
-          customerChatId: contact.chatId,
           displayName: lead.title,
           industry: lead.industry,
+          ...chatIdFields,
         })
         .returning({ id: whatsappConversations.id });
       conversationId = createdConv.id;
