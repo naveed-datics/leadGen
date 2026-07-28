@@ -10,6 +10,7 @@ import {
   getWahaSessionMe,
   getWahaSessionWebhookUrls,
   isWahaConfigured,
+  syncWahaSessionWebhook,
 } from "@/lib/integrations/waha";
 import {
   getWebhookUrlForAgent,
@@ -20,11 +21,12 @@ function phoneFromWahaId(id: string): string {
   return id.split("@")[0]?.replace(/\D/g, "") || id;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const agent = await requireActiveAgent();
     const configured = isWahaConfigured();
-    const webhookUrl = getWebhookUrlForAgent(agent.id);
+    const origin = new URL(request.url).origin;
+    const webhookUrl = getWebhookUrlForAgent(agent.id, origin);
     const dashboardUrl = getWahaDashboardUrl();
 
     if (!configured) {
@@ -93,9 +95,22 @@ export async function GET() {
       } catch {
         webhookConfigured = false;
       }
+
+      if (
+        connected &&
+        !webhookConfigured &&
+        !webhookReachabilityWarning
+      ) {
+        try {
+          await syncWahaSessionWebhook(webhookUrl);
+          webhookConfigured = true;
+        } catch {
+          webhookConfigured = false;
+        }
+      }
     } else {
       webhookReachabilityWarning =
-        "Set WAHA_WEBHOOK_BASE_URL or WHATSAPP_HOOK_URL so inbound replies can reach LeadGen.";
+        "Could not determine a public app URL for inbound webhooks. Deploy the app or set WAHA_WEBHOOK_BASE_URL.";
     }
 
     return NextResponse.json({

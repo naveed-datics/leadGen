@@ -149,7 +149,7 @@ export async function POST(
 
     await db
       .update(whatsappConversations)
-      .set({ lastMessageAt: now })
+      .set({ lastMessageAt: now, customerChatId: contact.chatId })
       .where(eq(whatsappConversations.id, conv.id));
 
     const [message] = await db

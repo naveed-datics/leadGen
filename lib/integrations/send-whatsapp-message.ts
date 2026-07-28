@@ -173,20 +173,47 @@ export async function sendWhatsAppMessageToLead(
         lastMessageAt: new Date(),
         displayName: lead.title,
         industry: lead.industry,
+        customerChatId: contact.chatId,
       })
       .where(eq(whatsappConversations.id, conversationId));
   } else {
-    const [createdConv] = await db
-      .insert(whatsappConversations)
-      .values({
-        agentId: input.agentId,
-        leadId: input.leadId,
-        customerPhone: normalizedPhone,
-        displayName: lead.title,
-        industry: lead.industry,
-      })
-      .returning({ id: whatsappConversations.id });
-    conversationId = createdConv.id;
+    const [byPhone] = await db
+      .select({ id: whatsappConversations.id })
+      .from(whatsappConversations)
+      .where(
+        and(
+          eq(whatsappConversations.agentId, input.agentId),
+          eq(whatsappConversations.customerPhone, normalizedPhone),
+        ),
+      )
+      .limit(1);
+
+    if (byPhone) {
+      conversationId = byPhone.id;
+      await db
+        .update(whatsappConversations)
+        .set({
+          lastMessageAt: new Date(),
+          displayName: lead.title,
+          industry: lead.industry,
+          customerChatId: contact.chatId,
+          leadId: input.leadId,
+        })
+        .where(eq(whatsappConversations.id, conversationId));
+    } else {
+      const [createdConv] = await db
+        .insert(whatsappConversations)
+        .values({
+          agentId: input.agentId,
+          leadId: input.leadId,
+          customerPhone: normalizedPhone,
+          customerChatId: contact.chatId,
+          displayName: lead.title,
+          industry: lead.industry,
+        })
+        .returning({ id: whatsappConversations.id });
+      conversationId = createdConv.id;
+    }
   }
 
   await db.insert(whatsappMessages).values({

@@ -118,6 +118,7 @@ export async function POST(request: Request) {
           lastMessageAt: now,
           displayName: businessName,
           industry,
+          customerChatId: contact.chatId,
         })
         .where(eq(whatsappConversations.id, conversationId));
     } else {
@@ -126,6 +127,7 @@ export async function POST(request: Request) {
         .values({
           agentId: agent.id,
           customerPhone: normalizedPhone,
+          customerChatId: contact.chatId,
           displayName: businessName,
           industry,
           lastMessageAt: now,

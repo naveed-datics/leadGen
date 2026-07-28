@@ -146,15 +146,11 @@ export default function InboundWebhookTestPage() {
         <h2 className="font-semibold text-zinc-900 dark:text-zinc-100">Real WhatsApp testing</h2>
         <ol className="mt-2 list-decimal space-y-2 pl-5">
           <li>
-            Set{" "}
-            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">
-              WAHA_WEBHOOK_BASE_URL=https://YOUR_PUBLIC_HOST/api/whatsapp/webhook
-            </code>{" "}
-            in <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">.env.local</code>{" "}
-            (not localhost — WAHA must reach your app).
+            On Vercel, LeadGen auto-registers the webhook when you open Settings → WhatsApp.
+            Local dev still needs ngrok or{" "}
+            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">WAHA_WEBHOOK_BASE_URL</code>.
           </li>
-          <li>Use ngrok: <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">ngrok http 3000</code></li>
-          <li>Restart dev server, then Settings → WhatsApp → Register webhook.</li>
+          <li>Use ngrok locally: <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">ngrok http 3000</code></li>
           <li>Send a proposal via WhatsApp from a search lead, then reply from that phone.</li>
           <li>Check <Link href="/leads" className="underline">Leads</Link> and <Link href="/agent/chat" className="underline">Chat</Link>.</li>
         </ol>

@@ -7,7 +7,7 @@ import {
 } from "@/lib/integrations/waha";
 import { getWebhookUrlForAgent } from "@/lib/integrations/whatsapp-config";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const agent = await requireActiveAgent();
 
@@ -18,7 +18,8 @@ export async function GET() {
       );
     }
 
-    const webhookUrl = getWebhookUrlForAgent(agent.id);
+    const origin = new URL(request.url).origin;
+    const webhookUrl = getWebhookUrlForAgent(agent.id, origin);
     const status = await prepareWahaSessionForQr(webhookUrl || undefined);
 
     if (status === "WORKING") {

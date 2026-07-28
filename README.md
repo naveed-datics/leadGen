@@ -44,20 +44,19 @@ CRON_SECRET=generate-a-random-secret
 
 ### 3. WAHA webhook (inbound replies)
 
-LeadGen registers a **per-agent** webhook URL:
+LeadGen **auto-detects** the webhook URL from your deployed app (Vercel sets `VERCEL_URL` automatically). No env var is required on Vercel.
 
-`{WAHA_WEBHOOK_BASE_URL}/{agentId}` → e.g. `https://your-app.com/api/whatsapp/webhook/abc-123-agent-uuid`
-
-In `.env.local`:
+Optional override:
 
 ```bash
-# Public URL WAHA can reach (NOT localhost if WAHA is remote)
-WAHA_WEBHOOK_BASE_URL=https://YOUR_PUBLIC_HOST/api/whatsapp/webhook
+WAHA_WEBHOOK_BASE_URL=https://your-custom-domain.com/api/whatsapp/webhook
 ```
 
-Then in the app: **Settings → WhatsApp connection → Register webhook**.
+When you open **Settings → WhatsApp connection**, LeadGen registers:
 
-Optional: set `WAHA_WEBHOOK_SECRET` in LeadGen; WAHA sends it as header `X-Webhook-Secret`.
+`https://your-app/api/whatsapp/webhook/{agentId}`
+
+on the WAHA session automatically when WhatsApp is connected.
 
 #### Local testing (no real WhatsApp reply)
 

@@ -3,7 +3,7 @@ import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { isWahaConfigured, syncWahaSessionWebhook } from "@/lib/integrations/waha";
 import { getWebhookUrlForAgent } from "@/lib/integrations/whatsapp-config";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const agent = await requireActiveAgent();
 
@@ -14,12 +14,13 @@ export async function POST() {
       );
     }
 
-    const webhookUrl = getWebhookUrlForAgent(agent.id);
+    const origin = new URL(request.url).origin;
+    const webhookUrl = getWebhookUrlForAgent(agent.id, origin);
     if (!webhookUrl) {
       return NextResponse.json(
         {
           error:
-            "Webhook URL is not configured. Set WAHA_WEBHOOK_BASE_URL or WHATSAPP_HOOK_URL in .env.local",
+            "Could not determine a public webhook URL. Use a deployed app URL or set WAHA_WEBHOOK_BASE_URL.",
         },
         { status: 400 },
       );

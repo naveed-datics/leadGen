@@ -213,7 +213,7 @@ export async function syncWahaSessionWebhook(webhookUrl?: string): Promise<void>
   const config = buildSessionConfig(webhookUrl);
   if (!config) {
     throw new Error(
-      "Webhook URL is not configured. Set WAHA_WEBHOOK_BASE_URL or WHATSAPP_HOOK_URL in .env.local",
+      "Webhook URL is not configured. Open Settings while deployed or set WAHA_WEBHOOK_BASE_URL.",
     );
   }
 

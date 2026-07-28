@@ -30,6 +30,12 @@ export type HandleWahaWebhookOptions = {
   agentId?: string;
 };
 
+type ExistingConversation = {
+  id: string;
+  agentId: string;
+  leadId: string | null;
+};
+
 function extractMessageBody(payload: WahaMessagePayload): string {
   const body = payload.body?.trim() ?? "";
   if (body) return body;
@@ -42,6 +48,10 @@ function candidateChatIds(payload: WahaMessagePayload): string[] {
     .map((value) => value?.trim() ?? "")
     .filter(Boolean);
   return [...new Set(ids)];
+}
+
+function normalizeChatId(chatId: string): string {
+  return chatId.trim().toLowerCase();
 }
 
 export function isWahaWebhookPayload(body: unknown): body is WahaWebhookBody {
@@ -60,7 +70,47 @@ async function resolveInboundCustomerPhone(
   return null;
 }
 
-/** Match WAHA chat id to a phone we already messaged (handles @lid lookup failures). */
+async function findConversationByStoredChatId(
+  chatIds: string[],
+  preferredAgentId?: string,
+): Promise<(ExistingConversation & { customerPhone: string }) | null> {
+  const normalizedIds = chatIds.map(normalizeChatId).filter(Boolean);
+  if (normalizedIds.length === 0) return null;
+
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: whatsappConversations.id,
+      agentId: whatsappConversations.agentId,
+      leadId: whatsappConversations.leadId,
+      customerPhone: whatsappConversations.customerPhone,
+      customerChatId: whatsappConversations.customerChatId,
+    })
+    .from(whatsappConversations)
+    .where(
+      preferredAgentId
+        ? eq(whatsappConversations.agentId, preferredAgentId)
+        : undefined,
+    )
+    .orderBy(desc(whatsappConversations.lastMessageAt))
+    .limit(500);
+
+  for (const row of rows) {
+    const stored = row.customerChatId?.trim();
+    if (!stored) continue;
+    if (normalizedIds.includes(normalizeChatId(stored))) {
+      return {
+        id: row.id,
+        agentId: row.agentId,
+        leadId: row.leadId,
+        customerPhone: row.customerPhone,
+      };
+    }
+  }
+  return null;
+}
+
+/** Match WAHA chat id to a phone we already messaged (legacy @c.us conversations). */
 async function resolvePhoneFromKnownConversations(
   agentId: string,
   chatId: string,
@@ -74,18 +124,42 @@ async function resolvePhoneFromKnownConversations(
     .from(whatsappConversations)
     .where(eq(whatsappConversations.agentId, agentId));
 
-  const normalizedChatId = trimmed.toLowerCase();
+  const normalizedChatId = normalizeChatId(trimmed);
   for (const row of rows) {
     const phone = row.customerPhone.trim();
     if (!phone) continue;
-    const candidates = [`${phone}@c.us`, `${phone}@s.whatsapp.net`].map((value) =>
-      value.toLowerCase(),
-    );
+    const candidates = [`${phone}@c.us`, `${phone}@s.whatsapp.net`].map(normalizeChatId);
     if (candidates.includes(normalizedChatId)) {
       return phone;
     }
   }
   return null;
+}
+
+async function findConversationByPhone(
+  normalizedPhone: string,
+  preferredAgentId?: string,
+): Promise<ExistingConversation | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      id: whatsappConversations.id,
+      agentId: whatsappConversations.agentId,
+      leadId: whatsappConversations.leadId,
+    })
+    .from(whatsappConversations)
+    .where(
+      preferredAgentId
+        ? and(
+            eq(whatsappConversations.customerPhone, normalizedPhone),
+            eq(whatsappConversations.agentId, preferredAgentId),
+          )
+        : eq(whatsappConversations.customerPhone, normalizedPhone),
+    )
+    .orderBy(desc(whatsappConversations.lastMessageAt))
+    .limit(1);
+
+  return row ?? null;
 }
 
 export async function handleWahaWebhook(
@@ -103,9 +177,31 @@ export async function handleWahaWebhook(
 
   if (!messageBody) return;
 
-  let normalizedFrom = await resolveInboundCustomerPhone(payload);
+  const chatIds = candidateChatIds(payload);
+  const inboundChatId = payload.from?.trim() || chatIds[0] || null;
+
+  let normalizedFrom: string | null = null;
+  let existingConv: ExistingConversation | null = null;
+
+  const byStoredChatId = await findConversationByStoredChatId(
+    chatIds,
+    options?.agentId,
+  );
+  if (byStoredChatId) {
+    normalizedFrom = byStoredChatId.customerPhone;
+    existingConv = {
+      id: byStoredChatId.id,
+      agentId: byStoredChatId.agentId,
+      leadId: byStoredChatId.leadId,
+    };
+  }
+
+  if (!normalizedFrom) {
+    normalizedFrom = await resolveInboundCustomerPhone(payload);
+  }
+
   if (!normalizedFrom && options?.agentId) {
-    for (const chatId of candidateChatIds(payload)) {
+    for (const chatId of chatIds) {
       const fromHistory = await resolvePhoneFromKnownConversations(
         options.agentId,
         chatId,
@@ -116,30 +212,22 @@ export async function handleWahaWebhook(
       }
     }
   }
-  if (!normalizedFrom) return;
+
+  if (!normalizedFrom) {
+    console.warn("[waha-webhook] dropped inbound: could not resolve sender phone", {
+      chatIds,
+      agentId: options?.agentId ?? null,
+    });
+    return;
+  }
+
+  if (!existingConv) {
+    existingConv = await findConversationByPhone(normalizedFrom, options?.agentId);
+  }
 
   const { inboundAnalysisSkipRelationship } = getWhatsAppConfig();
 
   const db = getDb();
-
-  const agentClause = options?.agentId
-    ? eq(whatsappConversations.agentId, options.agentId)
-    : undefined;
-
-  const [existingConv] = await db
-    .select({
-      id: whatsappConversations.id,
-      agentId: whatsappConversations.agentId,
-      leadId: whatsappConversations.leadId,
-    })
-    .from(whatsappConversations)
-    .where(
-      agentClause
-        ? and(eq(whatsappConversations.customerPhone, normalizedFrom), agentClause)
-        : eq(whatsappConversations.customerPhone, normalizedFrom),
-    )
-    .orderBy(desc(whatsappConversations.lastMessageAt))
-    .limit(1);
 
   let agentId: string | null = existingConv?.agentId ?? options?.agentId ?? null;
   if (!agentId) {
@@ -163,11 +251,16 @@ export async function handleWahaWebhook(
   let conversationId: string;
   const conversationLeadId: string | null = existingConv?.leadId ?? null;
 
+  const conversationPatch = {
+    lastMessageAt: now,
+    ...(inboundChatId ? { customerChatId: inboundChatId } : {}),
+  };
+
   if (existingConv) {
     conversationId = existingConv.id;
     await db
       .update(whatsappConversations)
-      .set({ lastMessageAt: now })
+      .set(conversationPatch)
       .where(eq(whatsappConversations.id, conversationId));
   } else {
     const [created] = await db
@@ -175,6 +268,7 @@ export async function handleWahaWebhook(
       .values({
         agentId,
         customerPhone: normalizedFrom,
+        customerChatId: inboundChatId,
         displayName: normalizedFrom,
         lastMessageAt: now,
       })

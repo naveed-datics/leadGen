@@ -230,6 +230,7 @@ export const whatsappConversations = pgTable("whatsapp_conversations", {
     .references(() => users.id, { onDelete: "cascade" }),
   leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),
   customerPhone: text("customer_phone").notNull(),
+  customerChatId: text("customer_chat_id"),
   displayName: text("display_name"),
   industry: text("industry"),
   lastMessageAt: timestamp("last_message_at", { withTimezone: true })
