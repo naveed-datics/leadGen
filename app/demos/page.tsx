@@ -23,6 +23,8 @@ export default function DemosPage() {
   const [demos, setDemos] = useState<Demo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
+  const [demoToDelete, setDemoToDelete] = useState<Demo | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -41,6 +43,29 @@ export default function DemosPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const confirmDeleteDemo = useCallback(async () => {
+    if (!demoToDelete) return;
+
+    setDeletingLeadId(demoToDelete.leadId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/leads/${demoToDelete.leadId}/demo`, {
+        method: "DELETE",
+      });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        setError(data?.error ?? "Failed to delete demo");
+        return;
+      }
+      setDemos((prev) => prev.filter((demo) => demo.leadId !== demoToDelete.leadId));
+      setDemoToDelete(null);
+    } catch {
+      setError("Network error");
+    } finally {
+      setDeletingLeadId(null);
+    }
+  }, [demoToDelete]);
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6">
@@ -77,8 +102,8 @@ export default function DemosPage() {
                 <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">
                   Created
                 </th>
-                <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">
-                  Demo
+                <th className="px-4 py-3 text-right font-medium text-zinc-600 dark:text-zinc-400">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -95,22 +120,68 @@ export default function DemosPage() {
                     {formatDate(demo.demoRequestedAt)}
                   </td>
                   <td className="px-4 py-3">
-                    {demo.demoUrl && (
-                      <a
-                        href={demo.demoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
-                        title="Open demo site"
+                    <div className="flex items-center justify-end gap-3">
+                      {demo.demoUrl && (
+                        <a
+                          href={demo.demoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
+                          title="Open demo site"
+                        >
+                          View demo
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setDemoToDelete(demo)}
+                        disabled={deletingLeadId === demo.leadId}
+                        className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-60 dark:text-red-400 dark:hover:text-red-300"
                       >
-                        View demo
-                      </a>
-                    )}
+                        {deletingLeadId === demo.leadId ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {demoToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              Delete demo?
+            </h2>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Remove the demo for{" "}
+              <span className="font-medium text-zinc-900 dark:text-zinc-200">
+                {demoToDelete.title}
+              </span>{" "}
+              from LeadGen. The lead and proposal stay; you can create a new demo later. The
+              WordPress site on demoGen is not deleted.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDemoToDelete(null)}
+                disabled={deletingLeadId === demoToDelete.leadId}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteDemo()}
+                disabled={deletingLeadId === demoToDelete.leadId}
+                className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deletingLeadId === demoToDelete.leadId ? "Deleting…" : "Delete demo"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>

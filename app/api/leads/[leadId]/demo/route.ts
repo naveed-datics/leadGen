@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getAgentDemoWebhookConfig, serializeProposal } from "@/lib/agent-settings";
 import { getSearchSettings } from "@/lib/search-proposal-settings";
-import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
+import { AuthError, requireActiveAgent, requireAuth } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { leads, proposals, searches } from "@/lib/db/schema";
 import {
@@ -12,7 +12,7 @@ import {
   type DemoWebhookResponse,
 } from "@/lib/integrations/demo-webhook";
 import { PROPOSAL_STATUS_IN_PROGRESS } from "@/lib/proposal-status";
-import { DEMO_STATUS_BUILDING, DEMO_STATUS_FAILED, DEMO_STATUS_READY } from "@/lib/demo-status";
+import { DEMO_STATUS_BUILDING, DEMO_STATUS_FAILED, DEMO_STATUS_NONE, DEMO_STATUS_READY } from "@/lib/demo-status";
 
 // The demo webhook's own pipeline can take minutes (clone -> AI-fill -> brand),
 // and we now poll asynchronously within this route.
@@ -209,6 +209,78 @@ export async function POST(
     }
     const message =
       error instanceof Error ? error.message : "Failed to create demo site";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/** DELETE /api/leads/{leadId}/demo — remove demo URL from LeadGen (does not delete the WP site). */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ leadId: string }> },
+) {
+  const { leadId } = await params;
+
+  if (!process.env.DATABASE_URL) {
+    return NextResponse.json(
+      { error: "Database is not configured" },
+      { status: 500 },
+    );
+  }
+
+  try {
+    const user = await requireAuth();
+    const db = getDb();
+
+    const [row] = await db
+      .select({
+        proposalId: proposals.id,
+        demoStatus: proposals.demoStatus,
+        demoUrl: proposals.demoUrl,
+      })
+      .from(leads)
+      .innerJoin(searches, eq(leads.searchId, searches.id))
+      .innerJoin(proposals, eq(proposals.leadId, leads.id))
+      .where(
+        and(
+          eq(leads.id, leadId),
+          user.role === "agent" ? eq(searches.agentId, user.id) : undefined,
+        ),
+      )
+      .limit(1);
+
+    if (!row) {
+      return NextResponse.json({ error: "Demo not found" }, { status: 404 });
+    }
+
+    if (row.demoStatus === DEMO_STATUS_BUILDING) {
+      return NextResponse.json(
+        { error: "Cannot delete a demo while it is still building." },
+        { status: 400 },
+      );
+    }
+
+    if (!row.demoUrl && row.demoStatus === DEMO_STATUS_NONE) {
+      return NextResponse.json({ error: "This lead has no demo to delete." }, { status: 400 });
+    }
+
+    await db
+      .update(proposals)
+      .set({
+        demoUrl: null,
+        demoStatus: DEMO_STATUS_NONE,
+        demoRequestedAt: null,
+        wpDemoPageId: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(proposals.id, row.proposalId));
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    const message =
+      error instanceof Error ? error.message : "Failed to delete demo";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
