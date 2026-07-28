@@ -338,6 +338,8 @@ export default function SearchDetailPage() {
     );
   }
 
+  const hasDemoTemplate = Boolean(search.demoTemplate?.trim());
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-10 sm:px-6 sm:py-14">
       <header className="space-y-2">
@@ -365,6 +367,11 @@ export default function SearchDetailPage() {
             timeStyle: "short",
           })}
         </p>
+        {!hasDemoTemplate && (
+          <p className="text-sm text-amber-700 dark:text-amber-300">
+            Set up a template first to create a demo
+          </p>
+        )}
         {checkingWhatsapp && (
           <p className="text-xs text-zinc-500">Checking WhatsApp numbers…</p>
         )}
@@ -460,6 +467,7 @@ export default function SearchDetailPage() {
         }
         checkingWhatsapp={checkingWhatsapp}
         creatingDemoLeadId={creatingDemoLeadId}
+        canCreateDemo={hasDemoTemplate}
         onViewBusiness={openBusinessView}
         onCreateProposal={openCreate}
         onEditProposal={openEdit}

@@ -369,11 +369,14 @@ export async function requestDemoBuild({
   googleBusinessProfileUrl,
   template,
   leadId,
+  callbackUrl,
   webhookConfig,
 }: {
   googleBusinessProfileUrl: string;
   template: string;
   leadId: string;
+  /** Consumer callback endpoint to receive final demo URL. */
+  callbackUrl?: string;
   webhookConfig?: { url: string | null; apiKey: string | null } | null;
 }): Promise<DemoWebhookResponse | DemoBuildAccepted> {
   const config = getDemoWebhookConfig(webhookConfig);
@@ -395,7 +398,7 @@ export async function requestDemoBuild({
         "Content-Type": "application/json",
         "X-LeadGen-API-Key": config.apiKey,
       },
-      body: JSON.stringify({ googleBusinessProfileUrl, template, leadId }),
+      body: JSON.stringify({ googleBusinessProfileUrl, template, leadId, callbackUrl }),
     });
 
     const text = await res.text().catch(() => "");
@@ -460,12 +463,14 @@ export async function createDemoSite({
   googleBusinessProfileUrl,
   template,
   leadId,
+  callbackUrl,
   webhookConfig,
 }: {
   googleBusinessProfileUrl: string;
   template: string;
   /** Consumer lead UUID — required by demoGen when a finish callback is configured. */
   leadId: string;
+  callbackUrl?: string;
   webhookConfig?: { url: string | null; apiKey: string | null } | null;
 }): Promise<DemoWebhookResponse> {
   const config = getDemoWebhookConfig(webhookConfig);
@@ -480,6 +485,7 @@ export async function createDemoSite({
     googleBusinessProfileUrl,
     template,
     leadId,
+    callbackUrl,
     webhookConfig,
   });
 

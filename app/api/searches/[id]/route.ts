@@ -61,6 +61,7 @@ export async function GET(
         proposalRepliedAt: proposals.repliedAt,
         proposalDemoUrl: proposals.demoUrl,
         proposalDemoStatus: proposals.demoStatus,
+        proposalDemoRequestedAt: proposals.demoRequestedAt,
       })
       .from(leads)
       .leftJoin(proposals, eq(proposals.leadId, leads.id))
@@ -79,6 +80,7 @@ export async function GET(
         location: search.location,
         totalFetched: search.totalFetched,
         totalWithoutWebsite: search.totalWithoutWebsite,
+        demoTemplate: search.demoTemplate,
         createdAt: search.createdAt.toISOString(),
       },
       leads: leadRows.map((row) => ({
@@ -106,6 +108,7 @@ export async function GET(
                   repliedAt: row.proposalRepliedAt?.toISOString() ?? null,
                   demoUrl: row.proposalDemoUrl ?? null,
                   demoStatus: row.proposalDemoStatus ?? "none",
+                  demoRequestedAt: row.proposalDemoRequestedAt?.toISOString() ?? null,
                   followUps,
                   followUpLabel: formatFollowUpStatus(followUps),
                 };
@@ -119,6 +122,52 @@ export async function GET(
     }
     const message =
       error instanceof Error ? error.message : "Failed to load search";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+
+  if (!process.env.DATABASE_URL) {
+    return NextResponse.json(
+      { error: "Database is not configured" },
+      { status: 500 },
+    );
+  }
+
+  try {
+    const user = await requireAuth();
+    const db = getDb();
+
+    const [search] = await db
+      .select({ id: searches.id })
+      .from(searches)
+      .where(
+        and(
+          eq(searches.id, id),
+          user.role === "agent" ? eq(searches.agentId, user.id) : undefined,
+        ),
+      )
+      .limit(1);
+
+    if (!search) {
+      return NextResponse.json({ error: "Search not found" }, { status: 404 });
+    }
+
+    // Cascade rules remove dependent leads/proposals/search_businesses/follow-ups.
+    await db.delete(searches).where(eq(searches.id, id));
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    const message =
+      error instanceof Error ? error.message : "Failed to delete search";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

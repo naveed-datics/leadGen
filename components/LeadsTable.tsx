@@ -9,11 +9,14 @@ import {
 import { isProposalReplied, isProposalSent } from "@/lib/proposal-status";
 import type { LeadWithProposal, SearchDetail } from "@/lib/types";
 
+const STALE_BUILD_MS = 15 * 60 * 1000;
+
 interface LeadsTableProps {
   search: SearchDetail;
   leads: LeadWithProposal[];
   checkingWhatsapp?: boolean;
   creatingDemoLeadId?: string | null;
+  canCreateDemo?: boolean;
   onViewBusiness: (lead: LeadWithProposal) => void;
   onCreateProposal: (lead: LeadWithProposal) => void;
   onEditProposal: (lead: LeadWithProposal) => void;
@@ -26,6 +29,7 @@ export function LeadsTable({
   leads,
   checkingWhatsapp = false,
   creatingDemoLeadId = null,
+  canCreateDemo = true,
   onViewBusiness,
   onCreateProposal,
   onEditProposal,
@@ -113,6 +117,7 @@ export function LeadsTable({
                       <ProposalAction
                         lead={lead}
                         creatingDemo={creatingDemoLeadId === lead.id}
+                        canCreateDemo={canCreateDemo}
                         onCreate={onCreateProposal}
                         onEdit={onEditProposal}
                         onView={onViewProposal}
@@ -165,6 +170,7 @@ export function LeadsTable({
                 <ProposalAction
                   lead={lead}
                   creatingDemo={creatingDemoLeadId === lead.id}
+                  canCreateDemo={canCreateDemo}
                   onCreate={onCreateProposal}
                   onEdit={onEditProposal}
                   onView={onViewProposal}
@@ -205,15 +211,29 @@ function ViewDemoButton({ demoUrl }: { demoUrl: string }) {
 function CreateDemoLink({
   lead,
   creatingDemo,
+  canCreateDemo,
   onCreateDemo,
 }: {
   lead: LeadWithProposal;
   creatingDemo: boolean;
+  canCreateDemo: boolean;
   onCreateDemo: (lead: LeadWithProposal) => void;
 }) {
   const building = lead.proposal?.demoStatus === DEMO_STATUS_BUILDING;
+  const requestedAt = lead.proposal?.demoRequestedAt
+    ? Date.parse(lead.proposal.demoRequestedAt)
+    : Number.NaN;
+  const isStaleBuild =
+    building &&
+    Number.isFinite(requestedAt) &&
+    Date.now() - requestedAt > STALE_BUILD_MS;
   const failed = lead.proposal?.demoStatus === DEMO_STATUS_FAILED;
-  const busy = creatingDemo || building;
+  const busy = creatingDemo || (building && !isStaleBuild) || !canCreateDemo;
+  const disabledTitle = !canCreateDemo
+    ? "Set up a template first to create a demo"
+    : isStaleBuild
+      ? "Previous build appears stuck. Click to retry."
+      : "Create demo site";
 
   return (
     <button
@@ -221,9 +241,17 @@ function CreateDemoLink({
       onClick={() => onCreateDemo(lead)}
       disabled={busy}
       className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950/40"
-      title="Create demo site"
+      title={disabledTitle}
     >
-      {building ? "Building demo…" : creatingDemo ? "Creating demo…" : failed ? "Retry demo" : "Create demo"}
+      {building
+        ? isStaleBuild
+          ? "Retry demo"
+          : "Building demo…"
+        : creatingDemo
+          ? "Creating demo…"
+          : failed
+            ? "Retry demo"
+            : "Create demo"}
     </button>
   );
 }
@@ -231,6 +259,7 @@ function CreateDemoLink({
 function ProposalAction({
   lead,
   creatingDemo,
+  canCreateDemo,
   onCreate,
   onEdit,
   onView,
@@ -238,6 +267,7 @@ function ProposalAction({
 }: {
   lead: LeadWithProposal;
   creatingDemo: boolean;
+  canCreateDemo: boolean;
   onCreate: (lead: LeadWithProposal) => void;
   onEdit: (lead: LeadWithProposal) => void;
   onView: (lead: LeadWithProposal) => void;
@@ -246,7 +276,12 @@ function ProposalAction({
   if (!lead.proposal) {
     return (
       <div className="flex justify-end gap-2">
-        <CreateDemoLink lead={lead} creatingDemo={creatingDemo} onCreateDemo={onCreateDemo} />
+        <CreateDemoLink
+          lead={lead}
+          creatingDemo={creatingDemo}
+          canCreateDemo={canCreateDemo}
+          onCreateDemo={onCreateDemo}
+        />
       </div>
     );
   }
@@ -268,7 +303,12 @@ function ProposalAction({
             </button>
           </>
         ) : (
-          <CreateDemoLink lead={lead} creatingDemo={creatingDemo} onCreateDemo={onCreateDemo} />
+          <CreateDemoLink
+            lead={lead}
+            creatingDemo={creatingDemo}
+            canCreateDemo={canCreateDemo}
+            onCreateDemo={onCreateDemo}
+          />
         )}
       </div>
     );

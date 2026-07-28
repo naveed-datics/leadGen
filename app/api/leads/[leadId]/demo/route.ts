@@ -20,7 +20,7 @@ import { DEMO_STATUS_BUILDING, DEMO_STATUS_FAILED, DEMO_STATUS_READY } from "@/l
 export const maxDuration = 300;
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ leadId: string }> },
 ) {
   const { leadId } = await params;
@@ -114,6 +114,7 @@ export async function POST(
         googleBusinessProfileUrl: leadRow.mapsUrl,
         template: searchSettings.demoTemplate || leadRow.industry,
         leadId,
+        callbackUrl: new URL("/api/webhooks/demo-url", request.url).toString(),
         webhookConfig,
       });
     } catch (buildError) {

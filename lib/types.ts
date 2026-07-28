@@ -92,6 +92,7 @@ export interface ProposalSummary {
   repliedAt: string | null;
   demoUrl: string | null;
   demoStatus?: "none" | "building" | "ready" | "failed";
+  demoRequestedAt?: string | null;
   followUps?: ProposalFollowUpSummary[];
   followUpLabel?: string | null;
 }
@@ -118,6 +119,7 @@ export interface SearchDetail {
   location: string;
   totalFetched: number;
   totalWithoutWebsite: number;
+  demoTemplate?: string | null;
   createdAt: string;
 }
 

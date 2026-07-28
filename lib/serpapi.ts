@@ -10,6 +10,18 @@ const SERPAPI_BASE = "https://serpapi.com/search.json";
 const PAGE_OFFSETS = [0, 20, 40, 60, 80, 100] as const;
 const RESULTS_PER_PAGE = 20;
 
+export class SerpApiError extends Error {
+  status: number;
+  retryAfterSeconds: number | null;
+
+  constructor(message: string, status: number, retryAfterSeconds: number | null = null) {
+    super(message);
+    this.name = "SerpApiError";
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 export function buildSearchQuery(industry: string, location: string): string {
   return `${industry} in ${location}`;
 }
@@ -69,7 +81,27 @@ async function fetchMapsPage(
   const response = await fetch(`${SERPAPI_BASE}?${params.toString()}`);
 
   if (!response.ok) {
-    throw new Error(`SerpApi request failed with status ${response.status}`);
+    const retryAfterRaw = response.headers.get("retry-after");
+    const retryAfterSeconds =
+      retryAfterRaw && /^\d+$/.test(retryAfterRaw)
+        ? Number.parseInt(retryAfterRaw, 10)
+        : null;
+
+    if (response.status === 429) {
+      throw new SerpApiError(
+        retryAfterSeconds != null
+          ? `SerpApi rate limit reached. Try again in about ${retryAfterSeconds} seconds.`
+          : "SerpApi rate limit reached. Try again in a few minutes.",
+        429,
+        retryAfterSeconds,
+      );
+    }
+
+    throw new SerpApiError(
+      `SerpApi request failed with status ${response.status}`,
+      response.status,
+      retryAfterSeconds,
+    );
   }
 
   const data = (await response.json()) as SerpApiMapsResponse;

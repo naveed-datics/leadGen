@@ -7,9 +7,15 @@ import type { SearchSummary } from "@/lib/types";
 
 interface SearchesTableProps {
   searches: SearchSummary[];
+  deletingSearchId?: string | null;
+  onDeleteSearch: (search: SearchSummary) => void;
 }
 
-export function SearchesTable({ searches }: SearchesTableProps) {
+export function SearchesTable({
+  searches,
+  deletingSearchId = null,
+  onDeleteSearch,
+}: SearchesTableProps) {
   const [settingsSearch, setSettingsSearch] = useState<SearchSummary | null>(
     null,
   );
@@ -76,6 +82,14 @@ export function SearchesTable({ searches }: SearchesTableProps) {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => onDeleteSearch(search)}
+                        disabled={deletingSearchId === search.id}
+                        className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-60 dark:text-red-400 dark:hover:text-red-300"
+                      >
+                        {deletingSearchId === search.id ? "Deleting…" : "Delete"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => setSettingsSearch(search)}

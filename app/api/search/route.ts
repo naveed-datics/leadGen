@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveSearch } from "@/lib/db/save-search";
-import { searchBusinessesWithoutWebsite } from "@/lib/serpapi";
+import { SerpApiError, searchBusinessesWithoutWebsite } from "@/lib/serpapi";
 import type { SearchRequest } from "@/lib/types";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
@@ -97,6 +97,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ...result, searchId });
   } catch (error) {
+    if (error instanceof SerpApiError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status === 429 ? 429 : 502 },
+      );
+    }
     const message =
       error instanceof Error ? error.message : "Search failed unexpectedly";
     return NextResponse.json({ error: message }, { status: 502 });

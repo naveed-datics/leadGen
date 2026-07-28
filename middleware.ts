@@ -4,6 +4,7 @@ import { authCookieName, verifyAuthToken } from "@/lib/auth/jwt";
 
 const PUBLIC_PATHS = new Set<string>([
   "/login",
+  "/api/webhooks/demo-url",
   "/api/whatsapp/waha/webhook",
   "/api/whatsapp/webhook",
 ]);
