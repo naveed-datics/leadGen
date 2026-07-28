@@ -37,6 +37,29 @@ async function searchLeadExistsForPhone(
   return rows.some((row) => phonesMatch(row.phone, customerPhone));
 }
 
+async function hasOutboundHistoryForPhone(
+  agentId: string,
+  customerPhone: string,
+): Promise<boolean> {
+  const db = getDb();
+  const [row] = await db
+    .select({ id: whatsappMessages.id })
+    .from(whatsappMessages)
+    .innerJoin(
+      whatsappConversations,
+      eq(whatsappMessages.conversationId, whatsappConversations.id),
+    )
+    .where(
+      and(
+        eq(whatsappConversations.agentId, agentId),
+        eq(whatsappConversations.customerPhone, customerPhone),
+        eq(whatsappMessages.direction, "outbound"),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 export async function ensureInboundLeadFromReply(
   input: InboundLeadReplyInput,
 ): Promise<void> {
@@ -53,7 +76,13 @@ export async function ensureInboundLeadFromReply(
     )
     .limit(1);
 
-  if (!outbound) return;
+  if (!outbound) {
+    const hasOutboundByPhone = await hasOutboundHistoryForPhone(
+      input.agentId,
+      input.customerPhone,
+    );
+    if (!hasOutboundByPhone) return;
+  }
 
   if (await searchLeadExistsForPhone(input.agentId, input.customerPhone)) {
     return;

@@ -12,6 +12,7 @@ import {
   isWahaWebhookPayload,
   type WahaWebhookBody,
 } from "@/lib/integrations/waha-webhook";
+import { ensureInboundLeadFromReply } from "@/lib/integrations/inbound-lead-create";
 
 function getVerifyToken(): string {
   const token = process.env.WHATSAPP_VERIFY_TOKEN;
@@ -151,6 +152,14 @@ async function handleMetaWebhook(payload: WebhookPayload): Promise<void> {
           waMessageId,
           status: "received",
           createdAt: now,
+        });
+
+        await ensureInboundLeadFromReply({
+          agentId: agent.id,
+          conversationId,
+          customerPhone: normalizedFrom,
+          messageBody: body,
+          repliedAt: now,
         });
       }
     }
