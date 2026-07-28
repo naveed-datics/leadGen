@@ -23,18 +23,24 @@ function phonesMatch(storedPhone: string | null, normalizedCustomerPhone: string
   return normalized === normalizedCustomerPhone;
 }
 
-async function searchLeadExistsForPhone(
+async function getSearchLeadForPhone(
   agentId: string,
   customerPhone: string,
-): Promise<boolean> {
+): Promise<{ title: string; industry: string | null } | null> {
   const db = getDb();
   const rows = await db
-    .select({ phone: leads.phone })
+    .select({
+      title: leads.title,
+      industry: searches.industry,
+      phone: leads.phone,
+    })
     .from(leads)
     .innerJoin(searches, eq(leads.searchId, searches.id))
     .where(eq(searches.agentId, agentId));
 
-  return rows.some((row) => phonesMatch(row.phone, customerPhone));
+  const match = rows.find((row) => phonesMatch(row.phone, customerPhone));
+  if (!match) return null;
+  return { title: match.title, industry: match.industry };
 }
 
 async function hasOutboundHistoryForPhone(
@@ -84,10 +90,6 @@ export async function ensureInboundLeadFromReply(
     if (!hasOutboundByPhone) return;
   }
 
-  if (await searchLeadExistsForPhone(input.agentId, input.customerPhone)) {
-    return;
-  }
-
   const [conv] = await db
     .select({
       displayName: whatsappConversations.displayName,
@@ -97,8 +99,16 @@ export async function ensureInboundLeadFromReply(
     .where(eq(whatsappConversations.id, input.conversationId))
     .limit(1);
 
-  const businessName = conv?.displayName?.trim() || input.customerPhone;
-  const industry = conv?.industry ?? null;
+  const searchLead = await getSearchLeadForPhone(
+    input.agentId,
+    input.customerPhone,
+  );
+
+  const businessName =
+    conv?.displayName?.trim() ||
+    searchLead?.title?.trim() ||
+    input.customerPhone;
+  const industry = conv?.industry ?? searchLead?.industry ?? null;
 
   const [existing] = await db
     .select({ id: inboundLeads.id })

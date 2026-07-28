@@ -246,6 +246,16 @@ export function WhatsAppConnectionCard() {
                 <dd className="mt-1 break-all font-mono text-xs text-zinc-700 dark:text-zinc-300">
                   {connection.webhookUrl || "—"}
                 </dd>
+                {connection.webhookUrl && (
+                  <dd className="mt-2">
+                    <a
+                      href="/agent/settings/inbound-webhook-test"
+                      className="text-xs font-medium text-sky-700 hover:underline dark:text-sky-300"
+                    >
+                      Test inbound locally →
+                    </a>
+                  </dd>
+                )}
               </div>
             </dl>
           </div>

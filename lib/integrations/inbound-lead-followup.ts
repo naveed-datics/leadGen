@@ -78,13 +78,12 @@ export async function processInboundLeadFollowUp(
         .where(eq(whatsappConversations.id, input.conversationId));
     } else {
       const fallbackLeadId = await findLeadByPhone(input.agentId, input.customerPhone);
-      if (fallbackLeadId) {
-        await db
-          .update(whatsappConversations)
-          .set({ leadId: fallbackLeadId })
-          .where(eq(whatsappConversations.id, input.conversationId));
-      }
-      return;
+      if (!fallbackLeadId) return;
+      leadId = fallbackLeadId;
+      await db
+        .update(whatsappConversations)
+        .set({ leadId: fallbackLeadId })
+        .where(eq(whatsappConversations.id, input.conversationId));
     }
   }
 

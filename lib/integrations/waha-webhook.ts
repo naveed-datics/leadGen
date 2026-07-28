@@ -31,7 +31,10 @@ export type HandleWahaWebhookOptions = {
 };
 
 function extractMessageBody(payload: WahaMessagePayload): string {
-  return payload.body?.trim() ?? "";
+  const body = payload.body?.trim() ?? "";
+  if (body) return body;
+  if (payload.hasMedia) return "[media]";
+  return "";
 }
 
 function candidateChatIds(payload: WahaMessagePayload): string[] {
@@ -57,6 +60,34 @@ async function resolveInboundCustomerPhone(
   return null;
 }
 
+/** Match WAHA chat id to a phone we already messaged (handles @lid lookup failures). */
+async function resolvePhoneFromKnownConversations(
+  agentId: string,
+  chatId: string,
+): Promise<string | null> {
+  const trimmed = chatId.trim();
+  if (!trimmed) return null;
+
+  const db = getDb();
+  const rows = await db
+    .select({ customerPhone: whatsappConversations.customerPhone })
+    .from(whatsappConversations)
+    .where(eq(whatsappConversations.agentId, agentId));
+
+  const normalizedChatId = trimmed.toLowerCase();
+  for (const row of rows) {
+    const phone = row.customerPhone.trim();
+    if (!phone) continue;
+    const candidates = [`${phone}@c.us`, `${phone}@s.whatsapp.net`].map((value) =>
+      value.toLowerCase(),
+    );
+    if (candidates.includes(normalizedChatId)) {
+      return phone;
+    }
+  }
+  return null;
+}
+
 export async function handleWahaWebhook(
   body: WahaWebhookBody,
   options?: HandleWahaWebhookOptions,
@@ -72,7 +103,19 @@ export async function handleWahaWebhook(
 
   if (!messageBody) return;
 
-  const normalizedFrom = await resolveInboundCustomerPhone(payload);
+  let normalizedFrom = await resolveInboundCustomerPhone(payload);
+  if (!normalizedFrom && options?.agentId) {
+    for (const chatId of candidateChatIds(payload)) {
+      const fromHistory = await resolvePhoneFromKnownConversations(
+        options.agentId,
+        chatId,
+      );
+      if (fromHistory) {
+        normalizedFrom = fromHistory;
+        break;
+      }
+    }
+  }
   if (!normalizedFrom) return;
 
   const { inboundAnalysisSkipRelationship } = getWhatsAppConfig();

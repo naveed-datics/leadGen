@@ -172,8 +172,7 @@ export default function InboundLeadsPage() {
           Leads
         </h1>
         <p className="text-zinc-600 dark:text-zinc-400">
-          WhatsApp replies from unique numbers you contacted. Each new reply creates a lead
-          for follow-up.
+          WhatsApp replies from contacts you messaged. Each reply appears here for follow-up.
         </p>
       </header>
 

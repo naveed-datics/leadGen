@@ -44,16 +44,46 @@ CRON_SECRET=generate-a-random-secret
 
 ### 3. WAHA webhook (inbound replies)
 
-Point your WAHA instance at LeadGen so agent chat receives replies:
+LeadGen registers a **per-agent** webhook URL:
+
+`{WAHA_WEBHOOK_BASE_URL}/{agentId}` → e.g. `https://your-app.com/api/whatsapp/webhook/abc-123-agent-uuid`
+
+In `.env.local`:
 
 ```bash
-WHATSAPP_HOOK_URL=https://YOUR_LEADGEN_DOMAIN/api/whatsapp/waha/webhook
-WHATSAPP_HOOK_EVENTS=message
+# Public URL WAHA can reach (NOT localhost if WAHA is remote)
+WAHA_WEBHOOK_BASE_URL=https://YOUR_PUBLIC_HOST/api/whatsapp/webhook
 ```
 
-Or configure a session webhook in WAHA (`POST /api/sessions/`) with the same URL and `events: ["message"]`.
+Then in the app: **Settings → WhatsApp connection → Register webhook**.
 
-Optional: set `WAHA_WEBHOOK_SECRET` in LeadGen and send it from WAHA via a custom header `X-Webhook-Secret`.
+Optional: set `WAHA_WEBHOOK_SECRET` in LeadGen; WAHA sends it as header `X-Webhook-Secret`.
+
+#### Local testing (no real WhatsApp reply)
+
+1. Start dev server: `npm run dev`
+2. Log in as agent → **Settings → Test inbound WhatsApp reply** (`/agent/settings/inbound-webhook-test`)
+3. First send a WhatsApp message to a contact from a **search lead** (creates outbound history)
+4. Run the simulator with that contact's phone — the lead should appear on `/leads`
+
+Or from the shell (after an outbound send):
+
+```bash
+chmod +x scripts/test-inbound-webhook.sh
+WA_TO=15551234567 AGENT_ID=your-agent-uuid ./scripts/test-inbound-webhook.sh
+```
+
+#### Real WhatsApp replies locally
+
+WAHA on a remote host **cannot** POST to `localhost`. Use a tunnel:
+
+```bash
+ngrok http 3000
+# Set WAHA_WEBHOOK_BASE_URL=https://YOUR_NGROK_SUBDOMAIN.ngrok-free.app/api/whatsapp/webhook
+# Restart npm run dev, then Register webhook in Settings
+```
+
+**Important:** A number only becomes an inbound lead if (a) you contacted them first on WhatsApp, and (b) they are not already a search lead in your account.
 
 ### 4. Create database tables
 
