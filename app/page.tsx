@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BusinessList } from "@/components/BusinessList";
-import { SearchForm } from "@/components/SearchForm";
+import {
+  SearchForm,
+  type IndustryOption,
+} from "@/components/SearchForm";
 import { SearchProgress } from "@/components/SearchProgress";
-import type { SearchResult } from "@/lib/types";
 
 type MeResponse =
   | {
@@ -27,17 +29,22 @@ type AgentSettingsResponse =
 
 type CitiesResponse = { cities: string[] } | { error: string };
 
+type IndustriesResponse =
+  | { industries: IndustryOption[] }
+  | { error: string };
+
 export default function Home() {
-  const [industry, setIndustry] = useState("");
+  const router = useRouter();
+  const [industryId, setIndustryId] = useState("");
   const [city, setCity] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<SearchResult | null>(null);
-  const [searched, setSearched] = useState(false);
+  const [duplicateSearchId, setDuplicateSearchId] = useState<string | null>(null);
 
   const [meRole, setMeRole] = useState<"admin" | "agent" | null>(null);
   const [country, setCountry] = useState<string>("");
   const [cities, setCities] = useState<string[]>([]);
+  const [industries, setIndustries] = useState<IndustryOption[]>([]);
   const [serpApiReady, setSerpApiReady] = useState<boolean>(true);
   const [agentSearchEnabled, setAgentSearchEnabled] = useState<boolean>(true);
 
@@ -85,49 +92,106 @@ export default function Home() {
       );
       const citiesData = (await citiesRes.json()) as CitiesResponse;
       if (!citiesRes.ok) return;
-      const list = "cities" in citiesData && Array.isArray(citiesData.cities) ? citiesData.cities : [];
+      const list =
+        "cities" in citiesData && Array.isArray(citiesData.cities)
+          ? citiesData.cities
+          : [];
       if (!cancelled) {
         setCities(list);
-        if (!city && list.length > 0) setCity(list[0]);
+        setCity((prev) => (!prev && list.length > 0 ? list[0] : prev));
       }
     }
     void loadAgentSettings();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meRole]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadIndustries() {
+      if (meRole !== "agent") return;
+      try {
+        const res = await fetch("/api/agent/industries", { cache: "no-store" });
+        const data = (await res.json()) as IndustriesResponse;
+        if (cancelled || !res.ok || !("industries" in data)) return;
+        const list = Array.isArray(data.industries) ? data.industries : [];
+        setIndustries(list);
+        if (list.length > 0) {
+          setIndustryId((current) =>
+            current && list.some((i) => i.id === current) ? current : list[0].id,
+          );
+        } else {
+          setIndustryId("");
+        }
+      } catch {
+        // ignore
+      }
+    }
+    void loadIndustries();
+    return () => {
+      cancelled = true;
+    };
+  }, [meRole]);
+
+  function clearDuplicateState() {
+    setDuplicateSearchId(null);
+    setError(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (meRole === "agent" && (!serpApiReady || !agentSearchEnabled)) {
+    if (meRole !== "agent") {
+      setError("Lead search is available to agents only.");
+      return;
+    }
+    if (!serpApiReady || !agentSearchEnabled) {
+      return;
+    }
+    if (!industryId) {
+      setError("Select an industry before searching.");
       return;
     }
     setLoading(true);
     setError(null);
-    setResult(null);
-    setSearched(false);
+    setDuplicateSearchId(null);
 
     try {
       const response = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ industry, city }),
+        body: JSON.stringify({ industryId, city }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
+        const existingId =
+          typeof data?.existingSearchId === "string"
+            ? data.existingSearchId.trim()
+            : "";
+        if (response.status === 409 && existingId) {
+          setDuplicateSearchId(existingId);
+        }
         setError(data.error ?? "Search failed");
+        setLoading(false);
         return;
       }
 
-      setResult(data as SearchResult);
+      const searchId =
+        typeof data?.searchId === "string" ? data.searchId.trim() : "";
+      if (!searchId) {
+        setError("Search completed, but the saved search ID was not returned.");
+        setLoading(false);
+        return;
+      }
+
+      // Keep loading=true through navigation so the form stays disabled and
+      // cannot be double-submitted while the route transition is in flight.
+      router.push(`/searches/${encodeURIComponent(searchId)}`);
     } catch {
       setError("Network error. Check your connection and try again.");
-    } finally {
       setLoading(false);
-      setSearched(true);
     }
   }
 
@@ -141,10 +205,27 @@ export default function Home() {
           Find local businesses without a website
         </h1>
         <p className="max-w-2xl text-zinc-600 dark:text-zinc-400">
-          Enter an industry and location to search Google Maps via SerpApi and
+          Select an industry and city to search Google Maps via SerpApi and
           list leads that have no website listed.
         </p>
       </header>
+
+      {meRole === "admin" && (
+        <div
+          role="status"
+          className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300"
+        >
+          Lead search is available to agents only. Manage agents from{" "}
+          <Link href="/admin/agents" className="font-medium underline">
+            Agents
+          </Link>
+          , or open{" "}
+          <Link href="/searches" className="font-medium underline">
+            Saved Searches
+          </Link>{" "}
+          to review existing results.
+        </div>
+      )}
 
       {meRole === "agent" && !agentSearchEnabled && (
         <div
@@ -168,32 +249,32 @@ export default function Home() {
         </div>
       )}
 
-      <SearchForm
-        industry={industry}
-        location={city}
-        locationLabel={meRole === "agent" ? `Region: ${country || "—"}` : "Location"}
-        locationOptions={meRole === "agent" ? cities : undefined}
-        locationPlaceholder={meRole === "agent" ? "Search city" : "e.g. Austin, TX"}
-        locationLockedToOptions={meRole === "agent"}
-        disabled={meRole === "agent" ? !serpApiReady || !agentSearchEnabled : false}
-        loading={loading}
-        onIndustryChange={setIndustry}
-        onLocationChange={setCity}
-        onSubmit={handleSubmit}
-      />
+      {meRole === "agent" && (
+        <>
+          <SearchForm
+            industryId={industryId}
+            industryOptions={industries}
+            industryLockedToOptions
+            location={city}
+            locationLabel={`Region: ${country || "—"}`}
+            locationOptions={cities}
+            locationPlaceholder="Search city"
+            locationLockedToOptions
+            disabled={!serpApiReady || !agentSearchEnabled}
+            loading={loading}
+            onIndustryChange={(id) => {
+              clearDuplicateState();
+              setIndustryId(id);
+            }}
+            onLocationChange={(value) => {
+              clearDuplicateState();
+              setCity(value);
+            }}
+            onSubmit={handleSubmit}
+          />
 
-      <SearchProgress active={loading} />
-
-      {result?.searchId && searched && !loading && (
-        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100">
-          Saved to history.{" "}
-          <Link
-            href={`/searches/${result.searchId}`}
-            className="font-medium underline hover:no-underline"
-          >
-            View leads & proposals
-          </Link>
-        </p>
+          <SearchProgress active={loading} />
+        </>
       )}
 
       {error && (
@@ -202,10 +283,19 @@ export default function Home() {
           className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
         >
           {error}
+          {duplicateSearchId && (
+            <>
+              {" "}
+              <Link
+                href={`/searches/${encodeURIComponent(duplicateSearchId)}`}
+                className="font-medium underline hover:no-underline"
+              >
+                Open existing search
+              </Link>
+            </>
+          )}
         </div>
       )}
-
-      <BusinessList result={result} searched={searched && !loading} />
     </main>
   );
 }

@@ -124,7 +124,7 @@ export interface SearchDetail {
 }
 
 export interface SearchRequest {
-  industry: string;
+  industryId: string;
   city: string;
 }
 

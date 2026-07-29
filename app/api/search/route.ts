@@ -1,21 +1,40 @@
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { saveSearch } from "@/lib/db/save-search";
-import { SerpApiError, searchBusinessesWithoutWebsite } from "@/lib/serpapi";
-import type { SearchRequest } from "@/lib/types";
+import { z } from "zod";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
+import { isUniqueViolation } from "@/lib/db/industry-helpers";
+import { saveSearch } from "@/lib/db/save-search";
 import { getDb } from "@/lib/db/index";
-import { searchActivityLogs } from "@/lib/db/schema";
-import { resolveSerpApiKeyForAgent } from "@/lib/integrations/serpapi";
+import { industries, searchActivityLogs, searches } from "@/lib/db/schema";
 import { listCitiesForCountry } from "@/lib/geo/cities";
+import { buildSearchKey } from "@/lib/industries";
+import { resolveSerpApiKeyForAgent } from "@/lib/integrations/serpapi";
+import { SerpApiError, searchBusinessesWithoutWebsite } from "@/lib/serpapi";
+
+const SearchBodySchema = z.object({
+  industryId: z.string().uuid(),
+  city: z.string().min(1),
+});
 
 export async function POST(request: Request) {
-  let body: SearchRequest;
-
-  try {
-    body = (await request.json()) as SearchRequest;
-  } catch {
+  if (!process.env.DATABASE_URL) {
     return NextResponse.json(
-      { error: "Invalid JSON body" },
+      { error: "Database is not configured. Add DATABASE_URL to .env.local" },
+      { status: 500 },
+    );
+  }
+
+  let json: unknown;
+  try {
+    json = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const parsed = SearchBodySchema.safeParse(json);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Industry and city are required" },
       { status: 400 },
     );
   }
@@ -38,16 +57,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const industry = body.industry?.trim() ?? "";
+  const city = parsed.data.city.trim();
   const country = agent.region ?? "";
-  const city = body.city?.trim() ?? "";
-
-  if (!industry) {
-    return NextResponse.json(
-      { error: "Industry is required" },
-      { status: 400 },
-    );
-  }
 
   if (!city) {
     return NextResponse.json({ error: "City is required" }, { status: 400 });
@@ -58,6 +69,45 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: `City must be within assigned country (${country})` },
       { status: 403 },
+    );
+  }
+
+  const db = getDb();
+  const [industry] = await db
+    .select({
+      id: industries.id,
+      name: industries.name,
+    })
+    .from(industries)
+    .where(
+      and(
+        eq(industries.id, parsed.data.industryId),
+        eq(industries.agentId, agent.id),
+      ),
+    )
+    .limit(1);
+
+  if (!industry) {
+    return NextResponse.json(
+      { error: "Select an industry from your Industries list." },
+      { status: 400 },
+    );
+  }
+
+  const searchKey = buildSearchKey(industry.name, city);
+  const [existing] = await db
+    .select({ id: searches.id })
+    .from(searches)
+    .where(and(eq(searches.agentId, agent.id), eq(searches.searchKey, searchKey)))
+    .limit(1);
+
+  if (existing) {
+    return NextResponse.json(
+      {
+        error: `You already searched “${industry.name}” in ${city}. Open the existing saved search instead.`,
+        existingSearchId: existing.id,
+      },
+      { status: 409 },
     );
   }
 
@@ -72,30 +122,48 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 403 });
   }
 
-  if (!process.env.DATABASE_URL) {
-    return NextResponse.json(
-      { error: "Database is not configured. Add DATABASE_URL to .env.local" },
-      { status: 500 },
-    );
-  }
-
   try {
     const result = await searchBusinessesWithoutWebsite(
-      industry,
+      industry.name,
       `${city}, ${country}`,
       apiKey,
     );
 
-    const db = getDb();
-    await db.insert(searchActivityLogs).values({
-      agentId: agent.id,
-      query: result.query,
-      region: `${city}, ${country}`,
-    });
+    try {
+      const searchId = await saveSearch(
+        agent.id,
+        industry.name,
+        `${city}, ${country}`,
+        result,
+        searchKey,
+      );
 
-    const searchId = await saveSearch(agent.id, industry, `${city}, ${country}`, result);
+      await db.insert(searchActivityLogs).values({
+        agentId: agent.id,
+        query: result.query,
+        region: `${city}, ${country}`,
+      });
 
-    return NextResponse.json({ ...result, searchId });
+      return NextResponse.json({ ...result, searchId });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        const [raceExisting] = await db
+          .select({ id: searches.id })
+          .from(searches)
+          .where(
+            and(eq(searches.agentId, agent.id), eq(searches.searchKey, searchKey)),
+          )
+          .limit(1);
+        return NextResponse.json(
+          {
+            error: `You already searched “${industry.name}” in ${city}. Open the existing saved search instead.`,
+            existingSearchId: raceExisting?.id ?? null,
+          },
+          { status: 409 },
+        );
+      }
+      throw error;
+    }
   } catch (error) {
     if (error instanceof SerpApiError) {
       return NextResponse.json(

@@ -10,6 +10,7 @@
     "seed:admin": "tsx scripts/seed-admin.ts",
     "db:push": "drizzle-kit push",
     "db:migrate:customer-chat-id": "tsx scripts/apply-customer-chat-id-migration.ts",
+    "db:migrate:industries": "tsx scripts/apply-industries-migration.ts",
     "db:studio": "drizzle-kit studio",
     "cron:follow-ups": "tsx scripts/cron-follow-ups.ts"
   },

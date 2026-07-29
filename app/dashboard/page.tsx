@@ -297,7 +297,7 @@ export default function DashboardPage() {
           />
           <ActionCard
             href="/searches"
-            title="Opportunities"
+            title="Saved Searches"
             description="Search history and outreach prospects."
             icon={<CardIcon variant="history" />}
           />
@@ -317,6 +317,12 @@ export default function DashboardPage() {
             />
           ) : (
             <>
+              <ActionCard
+                href="/agent/industries"
+                title="Industries"
+                description="Choose the industries you can search."
+                icon={<CardIcon variant="search" />}
+              />
               <ActionCard
                 href="/agent/chat?start=1"
                 title="Start chat now"

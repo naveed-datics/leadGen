@@ -43,23 +43,55 @@ export const users = pgTable("users", {
     .notNull(),
 });
 
-export const searches = pgTable("searches", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  agentId: uuid("agent_id").references(() => users.id, { onDelete: "set null" }),
-  industry: text("industry").notNull(),
-  location: text("location").notNull(),
-  query: text("query").notNull(),
-  totalFetched: integer("total_fetched").notNull(),
-  totalWithoutWebsite: integer("total_without_website").notNull(),
-  pagesFetched: integer("pages_fetched").notNull(),
-  proposalTemplate: text("proposal_template"),
-  demoEnabled: boolean("demo_enabled").notNull().default(false),
-  defaultDemoPageId: integer("default_demo_page_id"),
-  demoTemplate: text("demo_template"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const industries = pgTable(
+  "industries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    nameNormalized: text("name_normalized").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("industries_agent_name_normalized_uidx").on(
+      table.agentId,
+      table.nameNormalized,
+    ),
+  ],
+);
+
+export const searches = pgTable(
+  "searches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    agentId: uuid("agent_id").references(() => users.id, { onDelete: "set null" }),
+    industry: text("industry").notNull(),
+    location: text("location").notNull(),
+    /** Normalized `industry|city` key for per-agent duplicate prevention. Null for legacy rows. */
+    searchKey: text("search_key"),
+    query: text("query").notNull(),
+    totalFetched: integer("total_fetched").notNull(),
+    totalWithoutWebsite: integer("total_without_website").notNull(),
+    pagesFetched: integer("pages_fetched").notNull(),
+    proposalTemplate: text("proposal_template"),
+    demoEnabled: boolean("demo_enabled").notNull().default(false),
+    defaultDemoPageId: integer("default_demo_page_id"),
+    demoTemplate: text("demo_template"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("searches_agent_search_key_uidx").on(table.agentId, table.searchKey),
+  ],
+);
 
 export const searchBusinesses = pgTable("search_businesses", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -317,7 +349,15 @@ export const leadCompetitorPicksRelations = relations(
   }),
 );
 
+export const industriesRelations = relations(industries, ({ one }) => ({
+  agent: one(users, {
+    fields: [industries.agentId],
+    references: [users.id],
+  }),
+}));
+
 export const usersRelations = relations(users, ({ many }) => ({
+  industries: many(industries),
   searchActivityLogs: many(searchActivityLogs),
   whatsappConversations: many(whatsappConversations),
 }));
