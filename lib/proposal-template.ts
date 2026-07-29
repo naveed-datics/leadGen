@@ -19,21 +19,15 @@ export const PROPOSAL_PLACEHOLDERS = [
   "{{demoUrl}}",
 ] as const;
 
-export const DEFAULT_PROPOSAL_TEMPLATE = `Hi {{businessName}} Team! 👋
+export const DEFAULT_PROPOSAL_TEMPLATE = `Hi, this is {{senderName}} — I help local {{industry}} in {{location}} get found online.
 
-I came across your business profile on Google — really impressive ratings! ⭐
-
-But I noticed you don't have a website yet, which is essential in today's digital world. Your nearby competitors already have websites and are getting customers online.
+I noticed {{businessName}} doesn't have a website yet, even though your Google reviews are great. That's leaving business on the table, since most people check for a website before calling.
 {{competitorBlock}}
-It's the right time to come online with a website and start getting potential clients. 🚀
-
-I actually went ahead and built you a *free working demo website* — no strings attached, just take a look 👇
+So I put together a free demo site for you already — no cost, no obligation, just take a look and see what you think:
 
 {{demoUrl}}
 
-It's live right now and fully customizable to match your brand. Let's hop on a quick call so I can walk you through it and we can finalize it based on your feedback. 😊
-
-{{senderName}},`;
+If you like the direction, I can have it live and customized with your branding this week. What do you think — worth a quick chat?`;
 
 function isSocialWebsiteUrl(url: string): boolean {
   try {
@@ -77,17 +71,19 @@ function formatStatsLine(stats: CompetitorWithStats["stats"]): string | null {
 }
 
 function formatCompetitorSection(competitors: CompetitorWithStats[]): string {
-  const lines = competitors.map((c, i) => {
+  const lines = competitors.map((c) => {
     const statsLine = formatStatsLine(c.stats);
-    const numberEmoji = ["1️⃣", "2️⃣", "3️⃣"][i] ?? `${i + 1}.`;
-    const base = `${numberEmoji} *${c.title}*\nWebsite: ${c.website}`;
-    return statsLine ? `${base}\n${statsLine}` : base;
+    const base = `- *${c.title}* — ${c.website}`;
+    return statsLine ? `${base}\n  ${statsLine}` : base;
   });
 
-  return `${lines.join("\n\n")}\n`;
+  return `${lines.join("\n")}\n`;
 }
 
-function buildCompetitorBlock(competitors: CompetitorWithStats[]): string {
+function buildCompetitorBlock(
+  competitors: CompetitorWithStats[],
+  industry: string,
+): string {
   const competitorsForStats = competitors
     .filter((c) => c.website?.trim())
     .filter((c) => !isSocialWebsiteUrl(c.website))
@@ -95,7 +91,7 @@ function buildCompetitorBlock(competitors: CompetitorWithStats[]): string {
 
   if (competitorsForStats.length === 0) return "";
 
-  return `\nLet me share some stats 👇\n\n${formatCompetitorSection(competitorsForStats)}`;
+  return `\nA couple of nearby ${industry.toLowerCase()} are already online, for reference:\n\n${formatCompetitorSection(competitorsForStats)}`;
 }
 
 function applyPlaceholders(
@@ -118,7 +114,7 @@ export function buildProposalTemplate({
   demoUrl,
   customTemplate,
 }: ProposalTemplateInput): string {
-  const competitorBlock = buildCompetitorBlock(competitors);
+  const competitorBlock = buildCompetitorBlock(competitors, industry);
   const signature = (senderName ?? "").trim() || "User Name";
   const template =
     customTemplate?.trim() || DEFAULT_PROPOSAL_TEMPLATE;
