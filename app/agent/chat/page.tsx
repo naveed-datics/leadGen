@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type ListMode = "inbox" | "sent";
 
@@ -47,7 +47,6 @@ export default function AgentChatPage() {
   const [starting, setStarting] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(async (mode: ListMode, options?: LoadOptions) => {
     const silent = options?.silent ?? false;
@@ -118,10 +117,6 @@ export default function AgentChatPage() {
     setReplyText("");
     void loadMessages(activeId);
   }, [activeId, loadMessages]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, activeId]);
 
   useEffect(() => {
     const tick = () => {
@@ -432,7 +427,6 @@ export default function AgentChatPage() {
                     </div>
                   </div>
                 ))}
-                <div ref={messagesEndRef} />
               </div>
             )}
           </div>

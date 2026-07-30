@@ -299,7 +299,7 @@ function ProposalAction({
               title="Create proposal"
             >
               <PlusIcon />
-              Create
+              Create proposal
             </button>
           </>
         ) : (
@@ -321,7 +321,7 @@ function ProposalAction({
         <button
           type="button"
           onClick={() => onView(lead)}
-          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200"
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200"
           title="View proposal"
         >
           <EyeIcon />
@@ -338,7 +338,7 @@ function ProposalAction({
         <button
           type="button"
           onClick={() => onView(lead)}
-          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200"
           title="View proposal"
         >
           <EyeIcon />
@@ -354,8 +354,12 @@ function ProposalAction({
       <button
         type="button"
         onClick={() => onEdit(lead)}
-        className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
-        title="View proposal"
+        className={`inline-flex items-center gap-1 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs font-medium ${
+          lead.proposal.demoUrl
+            ? "border-emerald-300 text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200"
+            : "border-zinc-300 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
+        }`}
+        title={lead.proposal.demoUrl ? "View proposal" : "Edit proposal"}
       >
         <EyeIcon />
         {lead.proposal.demoUrl ? "View proposal" : "Edit (In progress)"}
