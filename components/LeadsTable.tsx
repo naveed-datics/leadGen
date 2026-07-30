@@ -321,7 +321,7 @@ function ProposalAction({
         <button
           type="button"
           onClick={() => onView(lead)}
-          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200"
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-700 bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:border-emerald-800 hover:bg-emerald-800"
           title="View proposal"
         >
           <EyeIcon />
@@ -338,7 +338,7 @@ function ProposalAction({
         <button
           type="button"
           onClick={() => onView(lead)}
-          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200"
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-700 bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:border-emerald-800 hover:bg-emerald-800"
           title="View proposal"
         >
           <EyeIcon />
@@ -356,7 +356,7 @@ function ProposalAction({
         onClick={() => onEdit(lead)}
         className={`inline-flex items-center gap-1 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs font-medium ${
           lead.proposal.demoUrl
-            ? "border-emerald-300 text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200"
+            ? "border-emerald-700 bg-emerald-700 text-white hover:border-emerald-800 hover:bg-emerald-800"
             : "border-zinc-300 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
         }`}
         title={lead.proposal.demoUrl ? "View proposal" : "Edit proposal"}

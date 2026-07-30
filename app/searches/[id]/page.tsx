@@ -33,6 +33,7 @@ export default function SearchDetailPage() {
   const [checkingWhatsapp, setCheckingWhatsapp] = useState(false);
   const [whatsappConfigured, setWhatsappConfigured] = useState(false);
   const whatsappCheckStarted = useRef(false);
+  const proposalDeepLinkHandled = useRef(false);
   const [leadListMode, setLeadListMode] = useState<LeadListMode>("all");
   const [creatingDemoLeadId, setCreatingDemoLeadId] = useState<string | null>(null);
   const [demoEnabled, setDemoEnabled] = useState<boolean | null>(null);
@@ -201,6 +202,23 @@ export default function SearchDetailPage() {
     checkWhatsapp(search.id);
   }, [search, leads, checkWhatsapp]);
 
+  useEffect(() => {
+    if (loading || proposalDeepLinkHandled.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const leadId = params.get("proposalLead");
+    const action = params.get("proposalAction");
+    if (!leadId || (action !== "create" && action !== "view")) return;
+
+    const lead = leads.find((item) => item.id === leadId);
+    if (!lead) return;
+
+    proposalDeepLinkHandled.current = true;
+    setActiveLead(lead);
+    setModalMode(action === "view" && !lead.proposal?.body?.trim() ? "create" : action);
+    setModalOpen(true);
+  }, [loading, leads]);
+
   function openCreate(lead: LeadWithProposal) {
     setActiveLead(lead);
     setModalMode("create");
@@ -237,8 +255,11 @@ export default function SearchDetailPage() {
 
   function handleDemoCreated(proposal: ProposalSummary) {
     if (!activeLead) return;
-    updateLeadProposal(activeLead.id, proposal);
-    setActiveLead((l) => (l ? { ...l, proposal } : l));
+    const leadId = activeLead.id;
+    updateLeadProposal(leadId, proposal);
+    setActiveLead((lead) =>
+      lead?.id === leadId ? { ...lead, proposal } : lead,
+    );
   }
 
   async function handleCreateDemoInline(lead: LeadWithProposal) {
@@ -272,17 +293,20 @@ export default function SearchDetailPage() {
     if (!activeLead) {
       throw new Error("No active lead selected");
     }
+    const leadId = activeLead.id;
     setSaving(true);
     try {
-      const res = await fetch(`/api/leads/${activeLead.id}/proposal`, {
+      const res = await fetch(`/api/leads/${leadId}/proposal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
-      updateLeadProposal(activeLead.id, data.proposal);
-      setActiveLead((l) => (l ? { ...l, proposal: data.proposal } : l));
+      updateLeadProposal(leadId, data.proposal);
+      setActiveLead((lead) =>
+        lead?.id === leadId ? { ...lead, proposal: data.proposal } : lead,
+      );
       return data.proposal as ProposalSummary;
     } catch (e) {
       alert(e instanceof Error ? e.message : "Save failed");

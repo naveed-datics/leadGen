@@ -75,11 +75,25 @@ export function ProposalModal({
   const [demoCreating, setDemoCreating] = useState(false);
   const [demoError, setDemoError] = useState<string | null>(null);
   const autoDemoAttempted = useRef(false);
+  const autoSaveInFlight = useRef(false);
+  const autoSaveRequestId = useRef(0);
+  const onSaveRef = useRef(onSave);
   const [autoSavingDraft, setAutoSavingDraft] = useState(false);
   const [autoSavedDraft, setAutoSavedDraft] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [testPhone, setTestPhone] = useState("");
   const readOnly = mode === "view";
+
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
+  useEffect(() => {
+    autoSaveRequestId.current += 1;
+    autoSaveInFlight.current = false;
+    setAutoSavingDraft(false);
+    setAutoSavedDraft(false);
+  }, [open, leadId]);
 
   useEffect(() => {
     if (!open) {
@@ -282,27 +296,45 @@ export function ProposalModal({
     if (!open) return;
     if (mode !== "create") return;
     if (templateLoading) return;
+    if (demoCreating) return;
     if (readOnly) return;
     if (autoSavedDraft) return;
     if (!body.trim()) return;
+    if (autoSaveInFlight.current) return;
 
-    let cancelled = false;
-    setAutoSavingDraft(true);
-    onSave(body)
-      .then(() => {
-        if (!cancelled) setAutoSavedDraft(true);
-      })
-      .catch(() => {
-        // ignore: user can still manually save
-      })
-      .finally(() => {
-        if (!cancelled) setAutoSavingDraft(false);
-      });
+    const timeoutId = window.setTimeout(() => {
+      if (autoSaveInFlight.current) return;
 
-    return () => {
-      cancelled = true;
-    };
-  }, [open, mode, templateLoading, readOnly, autoSavedDraft, body, onSave]);
+      const requestId = ++autoSaveRequestId.current;
+      autoSaveInFlight.current = true;
+      setAutoSavingDraft(true);
+      onSaveRef.current(body)
+        .then(() => {
+          if (autoSaveRequestId.current === requestId) {
+            setAutoSavedDraft(true);
+          }
+        })
+        .catch(() => {
+          // ignore: user can still manually save
+        })
+        .finally(() => {
+          if (autoSaveRequestId.current === requestId) {
+            autoSaveInFlight.current = false;
+            setAutoSavingDraft(false);
+          }
+        });
+    }, 400);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    open,
+    mode,
+    templateLoading,
+    demoCreating,
+    readOnly,
+    autoSavedDraft,
+    body,
+  ]);
 
   if (!open) return null;
 

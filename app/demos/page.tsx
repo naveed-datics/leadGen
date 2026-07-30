@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Demo = {
   leadId: string;
@@ -9,6 +10,7 @@ type Demo = {
   searchId: string;
   proposalId: string;
   proposalStatus: string;
+  hasProposal: boolean;
   demoUrl: string | null;
   demoRequestedAt: string | null;
   updatedAt: string;
@@ -25,6 +27,7 @@ export default function DemosPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
   const [demoToDelete, setDemoToDelete] = useState<Demo | null>(null);
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -43,6 +46,10 @@ export default function DemosPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (demoToDelete) cancelDeleteRef.current?.focus();
+  }, [demoToDelete]);
 
   const confirmDeleteDemo = useCallback(async () => {
     if (!demoToDelete) return;
@@ -77,7 +84,7 @@ export default function DemosPage() {
       </p>
 
       {loading ? (
-        <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+        <p role="status" className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
           Loading…
         </p>
       ) : error ? (
@@ -93,16 +100,16 @@ export default function DemosPage() {
         </p>
       ) : (
         <div className="mt-6 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-          <table className="w-full text-left text-sm">
+          <table aria-label="Completed demos" className="w-full text-left text-sm">
             <thead className="bg-zinc-50 dark:bg-zinc-900">
               <tr>
-                <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">
+                <th scope="col" className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">
                   Lead
                 </th>
-                <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">
+                <th scope="col" className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">
                   Created
                 </th>
-                <th className="px-4 py-3 text-right font-medium text-zinc-600 dark:text-zinc-400">
+                <th scope="col" className="px-4 py-3 text-right font-medium text-zinc-600 dark:text-zinc-400">
                   Actions
                 </th>
               </tr>
@@ -128,15 +135,38 @@ export default function DemosPage() {
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
                           title="Open demo site"
+                          aria-label={`View demo for ${demo.title} (opens in new tab)`}
                         >
                           View demo
                         </a>
                       )}
+                      <Link
+                        href={{
+                          pathname: `/searches/${encodeURIComponent(demo.searchId)}`,
+                          query: {
+                            proposalLead: demo.leadId,
+                            proposalAction: demo.hasProposal ? "view" : "create",
+                          },
+                        }}
+                        className={`inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium ${
+                          demo.hasProposal
+                            ? "bg-emerald-700 text-white hover:bg-emerald-800"
+                            : "bg-zinc-800 text-white hover:bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                        }`}
+                        aria-label={`${demo.hasProposal ? "View" : "Create"} proposal for ${demo.title}`}
+                      >
+                        {demo.hasProposal ? "View proposal" : "Create proposal"}
+                      </Link>
                       <button
                         type="button"
                         onClick={() => setDemoToDelete(demo)}
                         disabled={deletingLeadId === demo.leadId}
                         className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-60 dark:text-red-400 dark:hover:text-red-300"
+                        aria-label={
+                          deletingLeadId === demo.leadId
+                            ? `Deleting demo for ${demo.title}`
+                            : `Delete demo for ${demo.title}`
+                        }
                       >
                         {deletingLeadId === demo.leadId ? "Deleting…" : "Delete"}
                       </button>
@@ -150,9 +180,17 @@ export default function DemosPage() {
       )}
 
       {demoToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-demo-title"
+        >
           <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            <h2
+              id="delete-demo-title"
+              className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+            >
               Delete demo?
             </h2>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -165,6 +203,7 @@ export default function DemosPage() {
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
+                ref={cancelDeleteRef}
                 type="button"
                 onClick={() => setDemoToDelete(null)}
                 disabled={deletingLeadId === demoToDelete.leadId}
