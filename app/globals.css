@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --background: #f7f8f7;
@@ -16,15 +17,14 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #09090b;
-    --foreground: #f4f4f5;
-    --surface: #111113;
-    --surface-muted: #18181b;
-    --border: #27272a;
-    --accent: #34d399;
-  }
+:root.dark {
+  color-scheme: dark;
+  --background: #09090b;
+  --foreground: #f4f4f5;
+  --surface: #111113;
+  --surface-muted: #18181b;
+  --border: #27272a;
+  --accent: #34d399;
 }
 
 html {
@@ -67,7 +67,8 @@ a {
 }
 
 @media (forced-colors: active) {
-  :root {
+  :root,
+  :root.dark {
     --background: Canvas;
     --foreground: CanvasText;
     --surface: Canvas;
