@@ -139,7 +139,7 @@ export default function AgentContactsPage() {
                     <td className="px-4 py-3 text-right">
                       <Link
                         href={`/agent/chat?conversation=${contact.id}`}
-                        className="inline-flex rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
+                        className="inline-flex whitespace-nowrap rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
                       >
                         Open chat
                       </Link>
@@ -168,7 +168,7 @@ export default function AgentContactsPage() {
                 )}
                 <Link
                   href={`/agent/chat?conversation=${contact.id}`}
-                  className="inline-block text-xs font-medium text-emerald-700 dark:text-emerald-300"
+                  className="inline-block whitespace-nowrap text-xs font-medium text-emerald-700 dark:text-emerald-300"
                 >
                   Open chat →
                 </Link>

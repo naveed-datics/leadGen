@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SearchesTable } from "@/components/SearchesTable";
@@ -263,6 +264,12 @@ export default function SearchesPage() {
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-10 sm:px-6 sm:py-14">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
+          <Link
+            href="/dashboard"
+            className="inline-flex text-sm font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+          >
+            ← Back to dashboard
+          </Link>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             Saved Searches
           </h1>

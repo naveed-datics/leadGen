@@ -9,6 +9,7 @@ export default function RepliedProposalsPage() {
       emptyMessage="No replies yet."
       dateLabel="Replied"
       dateField="repliedAt"
+      showDashboardBack
     />
   );
 }

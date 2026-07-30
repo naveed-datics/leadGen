@@ -9,6 +9,7 @@ export default function InProgressProposalsPage() {
       emptyMessage="No proposals in progress yet."
       dateLabel="Last updated"
       dateField="updatedAt"
+      showDashboardBack
     />
   );
 }
