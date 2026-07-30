@@ -47,6 +47,7 @@ export default function AgentChatPage() {
   const [starting, setStarting] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
   const conversationsRequestId = useRef(0);
   const messagesRequestId = useRef(0);
   const requestedLeadId = useRef<string | null>(null);
@@ -70,7 +71,10 @@ export default function AgentChatPage() {
       const requestedConversation = list.find(
         (conversation) => conversation.leadId === requestedLeadId.current,
       );
-      if (requestedConversation) requestedLeadId.current = null;
+      if (requestedConversation) {
+        requestedLeadId.current = null;
+        setMobileThreadOpen(true);
+      }
       setConversations(list);
       setActiveId((prev) => {
         if (requestedConversation) return requestedConversation.id;
@@ -123,7 +127,10 @@ export default function AgentChatPage() {
     if (params.get("filter") === "sent") setListMode("sent");
     requestedLeadId.current = params.get("lead");
     const convId = params.get("conversation");
-    if (convId) setActiveId(convId);
+    if (convId) {
+      setActiveId(convId);
+      setMobileThreadOpen(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -329,7 +336,7 @@ export default function AgentChatPage() {
         </div>
       )}
 
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className={`mt-6 flex-wrap gap-2 ${mobileThreadOpen ? "hidden md:flex" : "flex"}`}>
         <button
           type="button"
           onClick={() => setListMode("inbox")}
@@ -347,7 +354,9 @@ export default function AgentChatPage() {
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-[300px_1fr]">
-        <aside className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <aside
+          className={`${mobileThreadOpen ? "hidden md:block" : "block"} overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950`}
+        >
           <div className="border-b border-zinc-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800">
             {listMode === "inbox" ? "Replies received" : "Awaiting reply"}
           </div>
@@ -365,7 +374,10 @@ export default function AgentChatPage() {
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => setActiveId(c.id)}
+                  onClick={() => {
+                    setActiveId(c.id);
+                    setMobileThreadOpen(true);
+                  }}
                   className={`flex w-full flex-col gap-1 border-b border-zinc-100 p-3 text-left text-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900 ${
                     activeId === c.id ? "bg-emerald-50/80 dark:bg-emerald-950/20" : ""
                   }`}
@@ -399,8 +411,18 @@ export default function AgentChatPage() {
           </div>
         </aside>
 
-        <section className="flex min-h-[520px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <section
+          className={`${mobileThreadOpen ? "flex" : "hidden md:flex"} h-[calc(100dvh-18rem)] min-h-96 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm md:h-[520px] md:min-h-0 dark:border-zinc-800 dark:bg-zinc-950`}
+        >
+          <div className="flex items-start gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setMobileThreadOpen(false)}
+              className="shrink-0 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-semibold text-zinc-700 md:hidden dark:border-zinc-700 dark:text-zinc-200"
+            >
+              Back
+            </button>
+            <div className="min-w-0">
             {activeConversation ? (
               <>
                 <div className="font-medium text-zinc-900 dark:text-zinc-50">
@@ -417,8 +439,9 @@ export default function AgentChatPage() {
             ) : (
               <div className="text-sm text-zinc-500">Select a contact or conversation</div>
             )}
+            </div>
           </div>
-          <div className="flex-1 overflow-auto p-4">
+          <div className="min-h-0 flex-1 overflow-auto p-4">
             {!activeId ? (
               <div className="text-sm text-zinc-500">
                 Choose a conversation from the {listMode} list.

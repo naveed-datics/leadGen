@@ -212,7 +212,10 @@ export function Nav({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div
+        inert={mobileOpen ? true : undefined}
+        className="flex min-w-0 flex-1 flex-col"
+      >
         <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-zinc-200/80 bg-white/85 px-4 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/80 sm:px-6">
           <div className="flex items-center gap-3 md:hidden">
             <button
