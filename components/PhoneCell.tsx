@@ -10,7 +10,7 @@ interface PhoneCellProps {
 
 export function PhoneCell({ phone, hasWhatsapp, checking }: PhoneCellProps) {
   if (!phone) {
-    return <span className="text-zinc-400">—</span>;
+    return <span className="text-zinc-400">N/A</span>;
   }
 
   const waUrl = buildWhatsAppUrl(phone);
@@ -27,6 +27,7 @@ export function PhoneCell({ phone, hasWhatsapp, checking }: PhoneCellProps) {
           href={waUrl}
           target="_blank"
           rel="noopener noreferrer"
+          aria-label={`Open WhatsApp chat with ${phone} (opens in new tab)`}
           className="hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           {phone}
@@ -50,11 +51,12 @@ function StatusIcon({
   if (checking || hasWhatsapp === null || hasWhatsapp === undefined) {
     return (
       <span
+        role="img"
+        aria-label="Checking WhatsApp availability"
         className="inline-flex h-5 w-5 items-center justify-center"
-        title="Checking WhatsApp…"
       >
         <svg
-          className="h-4 w-4 animate-spin text-zinc-400"
+          className="h-4 w-4 animate-spin text-zinc-400 motion-reduce:hidden"
           fill="none"
           viewBox="0 0 24 24"
           aria-hidden
@@ -73,28 +75,27 @@ function StatusIcon({
             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
           />
         </svg>
+        <span
+          aria-hidden="true"
+          className="hidden h-2 w-2 rounded-full bg-zinc-400 motion-reduce:block"
+        />
       </span>
     );
   }
 
   if (hasWhatsapp && waUrl) {
     return (
-      <a
-        href={waUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        title="On WhatsApp — open chat"
-        className="inline-flex shrink-0 text-[#25D366] hover:opacity-80"
-      >
+      <span aria-hidden="true" className="inline-flex shrink-0 text-[#25D366]">
         <WhatsAppIcon />
-      </a>
+      </span>
     );
   }
 
   return (
     <span
+      role="img"
+      aria-label="Not on WhatsApp"
       className="inline-flex shrink-0 text-zinc-400"
-      title="Not on WhatsApp"
     >
       <NoWhatsAppIcon />
     </span>

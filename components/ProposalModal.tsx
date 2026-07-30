@@ -383,9 +383,10 @@ export function ProposalModal({
     >
       <button
         type="button"
+        tabIndex={-1}
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
-        aria-label="Close"
+        aria-label="Close proposal dialog"
       />
       <div className="relative z-10 w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
         <h2
@@ -397,11 +398,11 @@ export function ProposalModal({
         <p className="mt-1 text-sm text-zinc-500">{businessName}</p>
 
         {mode === "create" && (templateLoading || demoCreating) && (
-          <p className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
-            <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-300 border-t-emerald-500" />
+          <p role="status" className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-300 border-t-emerald-500 motion-reduce:hidden" />
             {templateLoading
-              ? "Step 1/2 — Creating proposal…"
-              : "Step 2/2 — Creating demo website…"}
+              ? "Preparing proposal (1 of 2)..."
+              : "Building demo website (2 of 2)..."}
           </p>
         )}
 
@@ -430,6 +431,7 @@ export function ProposalModal({
         )}
 
         <textarea
+          aria-label="Proposal message"
           value={body}
           onChange={(e) => setBody(e.target.value)}
           readOnly={readOnly || templateLoading}
@@ -445,7 +447,7 @@ export function ProposalModal({
         )}
 
         {sendDisabledReason && !readOnly && (
-          <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
+          <p role="status" className="mt-3 text-xs text-amber-700 dark:text-amber-300">
             {sendDisabledReason}
           </p>
         )}
@@ -459,11 +461,12 @@ export function ProposalModal({
                 onChange={(e) => setTestMode(e.target.checked)}
                 className="h-3.5 w-3.5 rounded border-zinc-300"
               />
-              Test mode — send to a custom WhatsApp number instead of the client
+              Test mode: send to a custom WhatsApp number instead of the client
             </label>
             {testMode && (
               <input
                 type="tel"
+                aria-label="Test WhatsApp number"
                 value={testPhone}
                 onChange={(e) => setTestPhone(e.target.value)}
                 placeholder="e.g. +1 555 123 4567"

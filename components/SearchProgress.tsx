@@ -17,7 +17,7 @@ export function SearchProgress({ active }: SearchProgressProps) {
       <div>
         <p className="font-medium">Searching Google Maps…</p>
         <p className="mt-0.5 text-emerald-700 dark:text-emerald-300/80">
-          Fetching up to 6 pages of results. This may take 15–30 seconds.
+          Fetching up to 6 pages of results. This may take 15-30 seconds.
         </p>
       </div>
     </div>
@@ -27,7 +27,7 @@ export function SearchProgress({ active }: SearchProgressProps) {
 function Spinner() {
   return (
     <svg
-      className="h-5 w-5 shrink-0 animate-spin text-emerald-600"
+      className="h-5 w-5 shrink-0 animate-spin text-emerald-600 motion-reduce:hidden"
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"

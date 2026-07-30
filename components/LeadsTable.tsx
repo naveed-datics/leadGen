@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { PhoneCell } from "@/components/PhoneCell";
 import {
   DEMO_STATUS_BUILDING,
@@ -36,6 +37,18 @@ export function LeadsTable({
   onViewProposal,
   onCreateDemo,
 }: LeadsTableProps) {
+  const [now, setNow] = useState(0);
+
+  useEffect(() => {
+    const update = () => setNow(Date.now());
+    const timeoutId = window.setTimeout(update, 0);
+    const intervalId = window.setInterval(update, 60_000);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
   if (leads.length === 0) {
     return (
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -52,19 +65,19 @@ export function LeadsTable({
       </p>
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="hidden overflow-x-auto sm:block">
-          <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
+          <table aria-label="Search leads" className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
             <thead className="bg-zinc-50 dark:bg-zinc-950/50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   Business
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   Phone
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   Rating
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <th scope="col" className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   Actions
                 </th>
               </tr>
@@ -79,7 +92,7 @@ export function LeadsTable({
                     <p className="font-medium text-zinc-900 dark:text-zinc-100">
                       {lead.title}
                     </p>
-                    <p className="text-xs text-zinc-500">{lead.address ?? "—"}</p>
+                    <p className="text-xs text-zinc-500">{lead.address ?? "Address unavailable"}</p>
                     {lead.proposal && isProposalReplied(lead.proposal.status) && (
                       <p className="mt-1 text-xs font-medium text-sky-700 dark:text-sky-300">
                         Replied {formatRelativeTime(lead.proposal.repliedAt)}
@@ -118,6 +131,7 @@ export function LeadsTable({
                         lead={lead}
                         creatingDemo={creatingDemoLeadId === lead.id}
                         canCreateDemo={canCreateDemo}
+                        now={now}
                         onCreate={onCreateProposal}
                         onEdit={onEditProposal}
                         onView={onViewProposal}
@@ -171,6 +185,7 @@ export function LeadsTable({
                   lead={lead}
                   creatingDemo={creatingDemoLeadId === lead.id}
                   canCreateDemo={canCreateDemo}
+                  now={now}
                   onCreate={onCreateProposal}
                   onEdit={onEditProposal}
                   onView={onViewProposal}
@@ -212,11 +227,13 @@ function CreateDemoLink({
   lead,
   creatingDemo,
   canCreateDemo,
+  now,
   onCreateDemo,
 }: {
   lead: LeadWithProposal;
   creatingDemo: boolean;
   canCreateDemo: boolean;
+  now: number;
   onCreateDemo: (lead: LeadWithProposal) => void;
 }) {
   const building = lead.proposal?.demoStatus === DEMO_STATUS_BUILDING;
@@ -226,7 +243,8 @@ function CreateDemoLink({
   const isStaleBuild =
     building &&
     Number.isFinite(requestedAt) &&
-    Date.now() - requestedAt > STALE_BUILD_MS;
+    now > 0 &&
+    now - requestedAt > STALE_BUILD_MS;
   const failed = lead.proposal?.demoStatus === DEMO_STATUS_FAILED;
   const busy = creatingDemo || (building && !isStaleBuild) || !canCreateDemo;
   const disabledTitle = !canCreateDemo
@@ -260,6 +278,7 @@ function ProposalAction({
   lead,
   creatingDemo,
   canCreateDemo,
+  now,
   onCreate,
   onEdit,
   onView,
@@ -268,6 +287,7 @@ function ProposalAction({
   lead: LeadWithProposal;
   creatingDemo: boolean;
   canCreateDemo: boolean;
+  now: number;
   onCreate: (lead: LeadWithProposal) => void;
   onEdit: (lead: LeadWithProposal) => void;
   onView: (lead: LeadWithProposal) => void;
@@ -280,6 +300,7 @@ function ProposalAction({
           lead={lead}
           creatingDemo={creatingDemo}
           canCreateDemo={canCreateDemo}
+          now={now}
           onCreateDemo={onCreateDemo}
         />
       </div>
@@ -307,6 +328,7 @@ function ProposalAction({
             lead={lead}
             creatingDemo={creatingDemo}
             canCreateDemo={canCreateDemo}
+            now={now}
             onCreateDemo={onCreateDemo}
           />
         )}
@@ -384,10 +406,10 @@ function formatRelativeTime(iso: string | null): string {
 }
 
 function formatRating(lead: LeadWithProposal): string {
-  if (lead.rating == null) return "—";
+  if (lead.rating == null) return "N/A";
   const reviews =
     lead.reviews != null ? ` (${lead.reviews})` : "";
-  return `${lead.rating}★${reviews}`;
+  return `${lead.rating} stars${reviews}`;
 }
 
 function PlusIcon() {

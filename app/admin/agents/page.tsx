@@ -16,6 +16,9 @@ type AgentRow = {
   updatedAt: string;
 };
 
+const inputClass =
+  "w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-950 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50";
+
 export default function AdminAgentsPage() {
   const [agents, setAgents] = useState<AgentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,13 +142,13 @@ export default function AdminAgentsPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6">
+    <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+          <h1 className="text-3xl font-bold tracking-[-0.035em] text-zinc-900 dark:text-zinc-50">
             Agents
           </h1>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
             Manage agent accounts, regions, and feature flags.
           </p>
         </div>
@@ -155,17 +158,18 @@ export default function AdminAgentsPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Filter by name/email/region"
-            className="w-full rounded-md border px-3 py-2 text-sm sm:w-72"
+            className={`${inputClass} sm:w-72`}
+            aria-label="Filter agents"
           />
           <button
             onClick={() => setCreateOpen(true)}
-            className="rounded-md bg-black px-3 py-2 text-sm text-white"
+            className="whitespace-nowrap rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 active:scale-[0.98]"
           >
             Add agent
           </button>
           <button
             onClick={() => void refresh()}
-            className="rounded-md border px-3 py-2 text-sm"
+            className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
             Refresh
           </button>
@@ -182,13 +186,16 @@ export default function AdminAgentsPage() {
       )}
 
       {success && (
-        <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100">
+        <div
+          role="status"
+          className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100"
+        >
           {success}
         </div>
       )}
 
       {createOpen && (
-        <div className="mt-6 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="mt-7 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
@@ -200,7 +207,7 @@ export default function AdminAgentsPage() {
             </div>
             <button
               onClick={() => setCreateOpen(false)}
-              className="rounded-md border px-3 py-1.5 text-xs"
+              className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               Close
             </button>
@@ -214,7 +221,8 @@ export default function AdminAgentsPage() {
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                autoComplete="name"
+                className={`mt-2 ${inputClass}`}
                 required
               />
             </label>
@@ -227,7 +235,7 @@ export default function AdminAgentsPage() {
                 <select
                   value={newRegion}
                   onChange={(e) => setNewRegion(e.target.value)}
-                  className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                  className={`mt-2 ${inputClass}`}
                   required
                 >
                   {countries.map((c) => (
@@ -240,7 +248,7 @@ export default function AdminAgentsPage() {
                 <input
                   value={newRegion}
                   onChange={(e) => setNewRegion(e.target.value)}
-                  className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                  className={`mt-2 ${inputClass}`}
                   placeholder="e.g. Pakistan"
                   required
                 />
@@ -254,7 +262,8 @@ export default function AdminAgentsPage() {
               <input
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                autoComplete="email"
+                className={`mt-2 ${inputClass}`}
                 type="email"
                 required
               />
@@ -267,7 +276,8 @@ export default function AdminAgentsPage() {
               <input
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                autoComplete="new-password"
+                className={`mt-2 ${inputClass}`}
                 type="password"
                 minLength={8}
                 required
@@ -278,7 +288,7 @@ export default function AdminAgentsPage() {
               <button
                 type="submit"
                 disabled={creating}
-                className="rounded-md bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
+                className="rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-60"
               >
                 {creating ? "Creating…" : "Create agent"}
               </button>
@@ -287,16 +297,16 @@ export default function AdminAgentsPage() {
         </div>
       )}
 
-      <div className="mt-6 overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-zinc-50 text-zinc-600 dark:bg-zinc-950 dark:text-zinc-400">
+      <div className="mt-7 overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <table aria-label="Agents" className="w-full text-left text-sm">
+          <thead className="bg-zinc-50/80 text-zinc-500 dark:bg-zinc-950/70 dark:text-zinc-400">
             <tr>
-              <th className="px-4 py-3 font-medium">Agent</th>
-              <th className="px-4 py-3 font-medium">Region</th>
-              <th className="px-4 py-3 font-medium">Active</th>
-              <th className="px-4 py-3 font-medium">Search</th>
-              <th className="px-4 py-3 font-medium">WhatsApp</th>
-              <th className="px-4 py-3 font-medium">Integrations</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Agent</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Region</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Active</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Search</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">WhatsApp</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Integrations</th>
             </tr>
           </thead>
           <tbody>
@@ -316,7 +326,7 @@ export default function AdminAgentsPage() {
               filtered.map((a) => (
                 <tr
                   key={a.id}
-                  className="border-t border-zinc-200 dark:border-zinc-800"
+                  className="border-t border-zinc-100 transition hover:bg-zinc-50/70 dark:border-zinc-800 dark:hover:bg-zinc-800/40"
                 >
                   <td className="px-4 py-3">
                     <div className="font-medium text-zinc-900 dark:text-zinc-50">
@@ -330,10 +340,11 @@ export default function AdminAgentsPage() {
                     {countries.length > 0 ? (
                       <select
                         value={a.region ?? ""}
+                        aria-label={`Region for ${a.name}`}
                         onChange={(e) =>
                           void toggleAgent(a.id, { region: e.target.value })
                         }
-                        className="rounded-md border px-2 py-1 text-xs"
+                        className="min-h-9 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
                       >
                         <option value="" disabled>
                           Select country…
@@ -345,13 +356,19 @@ export default function AdminAgentsPage() {
                         ))}
                       </select>
                     ) : (
-                      a.region ?? "—"
+                      a.region ?? "Not assigned"
                     )}
                   </td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => void toggleAgent(a.id, { active: !a.active })}
-                      className="rounded-md border px-2 py-1 text-xs"
+                      aria-pressed={a.active}
+                      aria-label={`${a.active ? "Deactivate" : "Activate"} ${a.name}`}
+                      className={`min-h-9 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                        a.active
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
+                          : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                      }`}
                     >
                       {a.active ? "Active" : "Inactive"}
                     </button>
@@ -361,7 +378,13 @@ export default function AdminAgentsPage() {
                       onClick={() =>
                         void toggleAgent(a.id, { searchEnabled: !a.searchEnabled })
                       }
-                      className="rounded-md border px-2 py-1 text-xs"
+                      aria-pressed={a.searchEnabled}
+                      aria-label={`${a.searchEnabled ? "Disable" : "Enable"} search for ${a.name}`}
+                      className={`min-h-9 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                        a.searchEnabled
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
+                          : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                      }`}
                     >
                       {a.searchEnabled ? "Enabled" : "Disabled"}
                     </button>
@@ -371,7 +394,13 @@ export default function AdminAgentsPage() {
                       onClick={() =>
                         void toggleAgent(a.id, { whatsAppEnabled: !a.whatsAppEnabled })
                       }
-                      className="rounded-md border px-2 py-1 text-xs"
+                      aria-pressed={a.whatsAppEnabled}
+                      aria-label={`${a.whatsAppEnabled ? "Disable" : "Enable"} WhatsApp for ${a.name}`}
+                      className={`min-h-9 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                        a.whatsAppEnabled
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
+                          : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                      }`}
                     >
                       {a.whatsAppEnabled ? "Enabled" : "Disabled"}
                     </button>

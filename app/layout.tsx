@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LeadGen — Businesses without websites",
+  title: "LeadGen - Businesses without websites",
   description:
     "Find local businesses on Google Maps that have no website, powered by SerpApi.",
 };

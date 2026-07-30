@@ -52,7 +52,7 @@ export default function AgentContactsPage() {
             Contacts
           </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Everyone you have messaged on WhatsApp — business name, phone, and industry.
+            Everyone you have messaged on WhatsApp, including business name, phone, and industry.
           </p>
         </div>
         <Link
@@ -81,22 +81,22 @@ export default function AgentContactsPage() {
       ) : (
         <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           <div className="hidden overflow-x-auto sm:block">
-            <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
+            <table aria-label="WhatsApp contacts" className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
               <thead className="bg-zinc-50 dark:bg-zinc-950/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
                     Business
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
                     Phone
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
                     Industry
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
                     Last activity
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  <th scope="col" className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">
                     Actions
                   </th>
                 </tr>
@@ -123,7 +123,7 @@ export default function AgentContactsPage() {
                       {contact.customerPhone}
                     </td>
                     <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-                      {contact.industry ?? "—"}
+                      {contact.industry ?? "Not specified"}
                     </td>
                     <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                       <time dateTime={contact.lastMessageAt}>

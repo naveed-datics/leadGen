@@ -43,19 +43,19 @@ export function SearchesTable({
     <>
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
+          <table aria-label="Saved searches" className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
             <thead className="bg-zinc-50 dark:bg-zinc-950/50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   Query
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   Date
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   Leads
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <th scope="col" className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   Action
                 </th>
               </tr>
@@ -86,6 +86,7 @@ export function SearchesTable({
                         type="button"
                         onClick={() => onDeleteSearch(search)}
                         disabled={deletingSearchId === search.id}
+                        aria-label={`Delete search ${search.query}`}
                         className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-60 dark:text-red-400 dark:hover:text-red-300"
                       >
                         {deletingSearchId === search.id ? "Deleting…" : "Delete"}
@@ -93,12 +94,14 @@ export function SearchesTable({
                       <button
                         type="button"
                         onClick={() => setSettingsSearch(search)}
+                        aria-label={`Open settings for ${search.query}`}
                         className="text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                       >
                         Settings
                       </button>
                       <Link
                         href={`/searches/${search.id}`}
+                        aria-label={`Explore search ${search.query}`}
                         className="text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
                       >
                         Explore

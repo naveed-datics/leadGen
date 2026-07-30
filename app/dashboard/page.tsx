@@ -147,7 +147,7 @@ function ActionCard({
   return (
     <Link
       href={href}
-      className="group rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-950"
+      className="group rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md motion-reduce:transform-none dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-emerald-800"
     >
       <div className="flex items-start gap-4">
         {icon}
@@ -160,7 +160,7 @@ function ActionCard({
           </div>
         </div>
       </div>
-      <div className="mt-4 text-sm font-medium text-emerald-700 opacity-0 transition group-hover:opacity-100 dark:text-emerald-300">
+      <div className="mt-4 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
         Open →
       </div>
     </Link>
@@ -219,18 +219,19 @@ export default function DashboardPage() {
   const title = useMemo(() => {
     if (!role) return "Dashboard";
     const who = role === "admin" ? "Admin" : "Agent";
-    const where = role === "admin" ? "Global" : region?.trim() ? region.trim() : "—";
-    return `${who} dashboard · ${where}`;
+    const where =
+      role === "admin" ? "Global" : region?.trim() ? region.trim() : "Not assigned";
+    return `${who} dashboard: ${where}`;
   }, [role, region]);
 
   return (
-    <main className="w-full px-4 py-10 sm:px-6 sm:py-14">
+    <main className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="w-full">
         <header className="space-y-2">
           <p className="text-sm font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
             LeadGen
           </p>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl dark:text-zinc-50">
+          <h1 className="text-3xl font-bold tracking-[-0.035em] text-zinc-900 sm:text-4xl dark:text-zinc-50">
             {title}
           </h1>
           <p className="max-w-2xl text-zinc-600 dark:text-zinc-400">
@@ -243,7 +244,7 @@ export default function DashboardPage() {
           <section className="mt-6 grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Link
               href="/searches"
-              className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-950"
+              className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md motion-reduce:transform-none dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-emerald-800"
             >
               <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 Potential clients (leads)
@@ -254,7 +255,7 @@ export default function DashboardPage() {
             </Link>
             <Link
               href="/proposals/in-progress"
-              className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-950"
+              className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md motion-reduce:transform-none dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-emerald-800"
             >
               <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 In progress
@@ -265,7 +266,7 @@ export default function DashboardPage() {
             </Link>
             <Link
               href="/proposals/sent"
-              className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-950"
+              className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md motion-reduce:transform-none dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-emerald-800"
             >
               <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 Applied / submitted (sent)
@@ -276,12 +277,12 @@ export default function DashboardPage() {
             </Link>
             <Link
               href="/proposals/replied"
-              className="rounded-2xl border border-sky-200 bg-sky-50/50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-sky-900/50 dark:bg-sky-950/20"
+              className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md motion-reduce:transform-none dark:border-emerald-900/50 dark:bg-emerald-950/20"
             >
-              <div className="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+              <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                 Needs follow-up (replied)
               </div>
-              <div className="mt-1 text-2xl font-bold text-sky-900 dark:text-sky-100">
+              <div className="mt-1 text-2xl font-bold text-emerald-950 dark:text-emerald-100">
                 {stats.proposalsReplied}
               </div>
             </Link>
