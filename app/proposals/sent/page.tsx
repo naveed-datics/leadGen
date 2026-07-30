@@ -9,6 +9,10 @@ export default function SentProposalsPage() {
       emptyMessage="No proposals sent yet."
       dateLabel="Sent"
       dateField="sentAt"
+      showDashboardBack
+      showChatAction
+      proposalActionLabel="View proposal"
+      linkToProposal
     />
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type ListMode = "inbox" | "sent";
 
@@ -47,8 +47,12 @@ export default function AgentChatPage() {
   const [starting, setStarting] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const conversationsRequestId = useRef(0);
+  const messagesRequestId = useRef(0);
+  const requestedLeadId = useRef<string | null>(null);
 
   const loadConversations = useCallback(async (mode: ListMode, options?: LoadOptions) => {
+    const requestId = ++conversationsRequestId.current;
     const silent = options?.silent ?? false;
     if (!silent) {
       setError(null);
@@ -60,25 +64,35 @@ export default function AgentChatPage() {
         cache: "no-store",
       });
       const data = (await res.json()) as { conversations?: Conversation[]; error?: string };
+      if (requestId !== conversationsRequestId.current) return;
       if (!res.ok) throw new Error(data.error ?? "Failed to load conversations");
       const list = data.conversations ?? [];
+      const requestedConversation = list.find(
+        (conversation) => conversation.leadId === requestedLeadId.current,
+      );
+      if (requestedConversation) requestedLeadId.current = null;
       setConversations(list);
       setActiveId((prev) => {
+        if (requestedConversation) return requestedConversation.id;
         if (prev && list.some((c) => c.id === prev)) return prev;
         return list[0]?.id ?? null;
       });
     } catch (e) {
+      if (requestId !== conversationsRequestId.current) return;
       if (!silent) {
         setError(e instanceof Error ? e.message : "Failed to load conversations");
         setConversations([]);
         setActiveId(null);
       }
     } finally {
-      if (!silent) setLoading(false);
+      if (requestId === conversationsRequestId.current && !silent) {
+        setLoading(false);
+      }
     }
   }, []);
 
   const loadMessages = useCallback(async (conversationId: string, options?: LoadOptions) => {
+    const requestId = ++messagesRequestId.current;
     const silent = options?.silent ?? false;
     if (!silent) setError(null);
     try {
@@ -87,9 +101,11 @@ export default function AgentChatPage() {
         { cache: "no-store" },
       );
       const data = (await res.json()) as { messages?: Message[]; error?: string };
+      if (requestId !== messagesRequestId.current) return;
       if (!res.ok) throw new Error(data.error ?? "Failed to load messages");
       setMessages(data.messages ?? []);
     } catch (e) {
+      if (requestId !== messagesRequestId.current) return;
       if (!silent) {
         setError(e instanceof Error ? e.message : "Failed to load messages");
         setMessages([]);
@@ -104,6 +120,8 @@ export default function AgentChatPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("start") === "1") setStartOpen(true);
+    if (params.get("filter") === "sent") setListMode("sent");
+    requestedLeadId.current = params.get("lead");
     const convId = params.get("conversation");
     if (convId) setActiveId(convId);
   }, []);
@@ -228,7 +246,10 @@ export default function AgentChatPage() {
       )}
 
       {success && (
-        <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100">
+        <div
+          role="status"
+          className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100"
+        >
           {success}
         </div>
       )}
