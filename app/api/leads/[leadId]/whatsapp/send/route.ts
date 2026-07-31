@@ -46,7 +46,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "WhatsApp is not configured. Set WAHA_BASE_URL and WAHA_SESSION in .env.local",
+          "WhatsApp is not configured on this server. Ask an admin to set WAHA_BASE_URL.",
       },
       { status: 403 },
     );

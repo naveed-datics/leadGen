@@ -359,7 +359,7 @@ export function ProposalModal({
       : demoCreating
         ? "Creating demo site…"
         : !whatsappConfigured
-          ? "Set WAHA_BASE_URL and WAHA_SESSION in .env.local and pair your WhatsApp session in WAHA"
+          ? "WhatsApp server is not configured. Ask an admin to set WAHA_BASE_URL, then pair your number in Settings."
           : testMode
             ? testPhone.trim().length < 8
               ? "Enter a valid test WhatsApp number"

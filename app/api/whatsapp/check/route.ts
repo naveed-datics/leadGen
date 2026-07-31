@@ -1,7 +1,8 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
-import { leads } from "@/lib/db/schema";
+import { leads, searches } from "@/lib/db/schema";
 import { checkWhatsAppExists, delay } from "@/lib/whatsapp";
 
 interface CheckItem {
@@ -17,6 +18,17 @@ export async function POST(request: Request) {
     );
   }
 
+  let agent;
+  try {
+    agent = await requireActiveAgent();
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    return NextResponse.json({ error: message }, { status: 401 });
+  }
+
   let body: { searchId?: string; leads?: CheckItem[] };
 
   try {
@@ -29,6 +41,16 @@ export async function POST(request: Request) {
   let toCheck: CheckItem[] = [];
 
   if (body.searchId) {
+    const [search] = await db
+      .select({ id: searches.id, agentId: searches.agentId })
+      .from(searches)
+      .where(eq(searches.id, body.searchId))
+      .limit(1);
+
+    if (!search || search.agentId !== agent.id) {
+      return NextResponse.json({ error: "Search not found" }, { status: 404 });
+    }
+
     const rows = await db
       .select({ id: leads.id, phone: leads.phone })
       .from(leads)
@@ -52,7 +74,7 @@ export async function POST(request: Request) {
   for (let i = 0; i < toCheck.length; i++) {
     const item = toCheck[i];
     try {
-      results[item.id] = await checkWhatsAppExists(item.phone);
+      results[item.id] = await checkWhatsAppExists(item.phone, agent.id);
     } catch {
       results[item.id] = false;
     }
@@ -89,21 +111,41 @@ export async function GET(request: Request) {
     );
   }
 
-  const db = getDb();
-  const rows = await db
-    .select({
-      id: leads.id,
-      hasWhatsapp: leads.hasWhatsapp,
-    })
-    .from(leads)
-    .where(eq(leads.searchId, searchId));
+  try {
+    const agent = await requireActiveAgent();
+    const db = getDb();
 
-  const results: Record<string, boolean | null> = {};
-  for (const row of rows) {
-    results[row.id] = row.hasWhatsapp;
+    const [search] = await db
+      .select({ id: searches.id, agentId: searches.agentId })
+      .from(searches)
+      .where(eq(searches.id, searchId))
+      .limit(1);
+
+    if (!search || search.agentId !== agent.id) {
+      return NextResponse.json({ error: "Search not found" }, { status: 404 });
+    }
+
+    const rows = await db
+      .select({
+        id: leads.id,
+        hasWhatsapp: leads.hasWhatsapp,
+      })
+      .from(leads)
+      .where(eq(leads.searchId, searchId));
+
+    const results: Record<string, boolean | null> = {};
+    for (const row of rows) {
+      results[row.id] = row.hasWhatsapp;
+    }
+
+    const needsCheck = rows.some((r) => r.hasWhatsapp === null);
+
+    return NextResponse.json({ results, needsCheck });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    return NextResponse.json({ error: message }, { status: 401 });
   }
-
-  const needsCheck = rows.some((r) => r.hasWhatsapp === null);
-
-  return NextResponse.json({ results, needsCheck });
 }

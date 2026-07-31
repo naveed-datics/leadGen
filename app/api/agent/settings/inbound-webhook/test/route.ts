@@ -4,6 +4,7 @@ import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { inboundLeads, whatsappConversations, whatsappMessages } from "@/lib/db/schema";
 import { handleWahaWebhook } from "@/lib/integrations/waha-webhook";
+import { wahaSessionForAgent } from "@/lib/integrations/waha";
 import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
 
 type TestInboundBody = {
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
     await handleWahaWebhook(
       {
         event: "message",
-        session: process.env.WAHA_SESSION?.trim() || "default",
+        session: wahaSessionForAgent(agent.id),
         payload: {
           id: `local-test-${Date.now()}`,
           from: `${normalizedPhone}@c.us`,

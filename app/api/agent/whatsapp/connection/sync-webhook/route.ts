@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
-import { isWahaConfigured, syncWahaSessionWebhook } from "@/lib/integrations/waha";
+import {
+  getWahaConfigForAgent,
+  isWahaConfigured,
+  syncWahaSessionWebhook,
+} from "@/lib/integrations/waha";
 import { getWebhookUrlForAgent } from "@/lib/integrations/whatsapp-config";
 
 export async function POST(request: Request) {
@@ -26,7 +30,7 @@ export async function POST(request: Request) {
       );
     }
 
-    await syncWahaSessionWebhook(webhookUrl);
+    await syncWahaSessionWebhook(getWahaConfigForAgent(agent.id), webhookUrl);
 
     return NextResponse.json({ ok: true, webhookUrl });
   } catch (error) {

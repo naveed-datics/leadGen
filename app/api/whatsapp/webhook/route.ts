@@ -12,6 +12,7 @@ import {
   isWahaWebhookPayload,
   type WahaWebhookBody,
 } from "@/lib/integrations/waha-webhook";
+import { agentIdFromWahaSession } from "@/lib/integrations/waha";
 import { ensureInboundLeadFromReply } from "@/lib/integrations/inbound-lead-create";
 
 function getVerifyToken(): string {
@@ -184,7 +185,9 @@ export async function POST(request: Request) {
 
   try {
     if (isWahaWebhookPayload(raw)) {
-      await handleWahaWebhook(raw as WahaWebhookBody);
+      const body = raw as WahaWebhookBody;
+      const agentId = agentIdFromWahaSession(body.session);
+      await handleWahaWebhook(body, agentId ? { agentId } : undefined);
     } else {
       await handleMetaWebhook(raw as WebhookPayload);
     }

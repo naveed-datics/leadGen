@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
-import { isWahaConfigured, logoutWahaSession } from "@/lib/integrations/waha";
+import {
+  getWahaConfigForAgent,
+  isWahaConfigured,
+  logoutWahaSession,
+} from "@/lib/integrations/waha";
 
 export async function POST() {
   try {
-    await requireActiveAgent();
+    const agent = await requireActiveAgent();
 
     if (!isWahaConfigured()) {
       return NextResponse.json(
@@ -13,7 +17,7 @@ export async function POST() {
       );
     }
 
-    await logoutWahaSession();
+    await logoutWahaSession(getWahaConfigForAgent(agent.id));
 
     return NextResponse.json({ ok: true });
   } catch (error) {

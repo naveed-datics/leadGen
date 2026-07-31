@@ -181,7 +181,8 @@ export function WhatsAppConnectionCard() {
           <div className="mt-5 space-y-4 text-sm">
             {!connection.configured ? (
               <p className="text-zinc-600 dark:text-zinc-400">
-                WAHA is not configured on this server. Set WAHA_BASE_URL in the environment.
+                WAHA is not configured on this server. Ask an admin to set
+                WAHA_BASE_URL, then refresh this page.
               </p>
             ) : connected ? (
               <p className="text-zinc-700 dark:text-zinc-300">

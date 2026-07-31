@@ -99,7 +99,7 @@ export default function AgentSettingsPage() {
           </div>
           <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-zinc-100 pt-4 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
             <span>SerpApi key: {agent.serpApiKeyConfigured ? "Configured" : "Missing"}</span>
-            <span>WAHA: {agent.waConfigured ? "Configured server-side" : "Not configured"}</span>
+            <span>WhatsApp server: {agent.waConfigured ? "Ready" : "Not configured"}</span>
           </div>
         </div>
       ) : (

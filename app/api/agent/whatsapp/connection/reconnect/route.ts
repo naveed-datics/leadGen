@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import {
+  getWahaConfigForAgent,
   isWahaConfigured,
   prepareWahaSessionForQr,
   restartWahaSession,
@@ -19,17 +20,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const wahaConfig = getWahaConfigForAgent(agent.id);
     const origin = new URL(request.url).origin;
     const webhookUrl = getWebhookUrlForAgent(agent.id, origin);
 
     if (webhookUrl) {
-      await syncWahaSessionWebhook(webhookUrl);
+      await syncWahaSessionWebhook(wahaConfig, webhookUrl);
     }
 
     try {
-      await restartWahaSession();
+      await restartWahaSession(wahaConfig);
     } catch {
-      await prepareWahaSessionForQr(webhookUrl || undefined);
+      await prepareWahaSessionForQr(wahaConfig, webhookUrl || undefined);
     }
 
     return NextResponse.json({ ok: true });

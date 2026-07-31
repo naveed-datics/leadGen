@@ -8,12 +8,13 @@ import {
 import { processInboundLeadFollowUp } from "@/lib/integrations/inbound-lead-followup";
 import { ensureInboundLeadFromReply } from "@/lib/integrations/inbound-lead-create";
 import { handleWahaMessageAck } from "@/lib/integrations/waha-message-ack";
-import { resolveWahaChatIdToPhone } from "@/lib/integrations/waha";
+import { resolveWahaChatIdToPhone, getWahaConfigForAgent, isWahaConfigured } from "@/lib/integrations/waha";
 import { getWhatsAppConfig } from "@/lib/integrations/whatsapp-config";
 import {
   hasCustomerChatIdColumn,
   optionalCustomerChatId,
 } from "@/lib/integrations/customer-chat-id-column";
+import { normalizePhoneForWhatsApp } from "@/lib/whatsapp";
 
 type WahaMessagePayload = {
   id?: string;
@@ -69,10 +70,23 @@ export function isWahaWebhookPayload(body: unknown): body is WahaWebhookBody {
 
 async function resolveInboundCustomerPhone(
   payload: WahaMessagePayload,
+  agentId?: string,
 ): Promise<string | null> {
+  const wahaConfig =
+    agentId && isWahaConfigured() ? getWahaConfigForAgent(agentId) : null;
+
   for (const chatId of candidateChatIds(payload)) {
     try {
-      const resolved = await resolveWahaChatIdToPhone(chatId);
+      if (!wahaConfig) {
+        const [localPart, suffix = ""] = chatId.trim().split("@");
+        if (!localPart) continue;
+        if (suffix === "c.us" || suffix === "s.whatsapp.net") {
+          const resolved = normalizePhoneForWhatsApp(localPart);
+          if (resolved) return resolved;
+        }
+        continue;
+      }
+      const resolved = await resolveWahaChatIdToPhone(wahaConfig, chatId);
       if (resolved) return resolved;
     } catch (error) {
       console.warn("[waha-webhook] LID/phone resolve failed:", chatId, error);
@@ -256,7 +270,10 @@ export async function handleWahaWebhook(
   }
 
   if (!normalizedFrom) {
-    normalizedFrom = await resolveInboundCustomerPhone(payload);
+    normalizedFrom = await resolveInboundCustomerPhone(
+      payload,
+      options?.agentId,
+    );
   }
 
   if (!normalizedFrom && options?.agentId) {

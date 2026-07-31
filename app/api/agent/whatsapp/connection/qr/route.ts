@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import {
   fetchWahaQrCodeWithRetry,
+  getWahaConfigForAgent,
   isWahaConfigured,
   prepareWahaSessionForQr,
 } from "@/lib/integrations/waha";
@@ -18,9 +19,13 @@ export async function GET(request: Request) {
       );
     }
 
+    const wahaConfig = getWahaConfigForAgent(agent.id);
     const origin = new URL(request.url).origin;
     const webhookUrl = getWebhookUrlForAgent(agent.id, origin);
-    const status = await prepareWahaSessionForQr(webhookUrl || undefined);
+    const status = await prepareWahaSessionForQr(
+      wahaConfig,
+      webhookUrl || undefined,
+    );
 
     if (status === "WORKING") {
       return NextResponse.json(
@@ -33,7 +38,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const qrDataUrl = await fetchWahaQrCodeWithRetry();
+    const qrDataUrl = await fetchWahaQrCodeWithRetry(wahaConfig);
     if (!qrDataUrl) {
       return NextResponse.json(
         {

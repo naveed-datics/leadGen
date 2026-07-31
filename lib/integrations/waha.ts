@@ -1,49 +1,74 @@
 import { buildChatId, normalizePhoneForWhatsApp } from "@/lib/whatsapp";
 
+export type WahaConfig = {
+  baseUrl: string;
+  apiKey?: string;
+  session: string;
+};
+
 export function isWahaConfigured(): boolean {
   return Boolean(process.env.WAHA_BASE_URL?.trim());
 }
 
-export function getWahaSession(): string {
-  return process.env.WAHA_SESSION?.trim() || "default";
+/** Stable per-agent WAHA session name on the shared server. */
+export function wahaSessionForAgent(agentId: string): string {
+  return `agent_${agentId}`;
 }
 
-function getWahaBaseUrl(): string {
-  const base = process.env.WAHA_BASE_URL?.trim();
-  if (!base) {
+/** Parse agent id from session name `agent_<uuid>`. */
+export function agentIdFromWahaSession(session?: string | null): string | undefined {
+  const name = session?.trim() ?? "";
+  if (!name.startsWith("agent_")) return undefined;
+  const id = name.slice("agent_".length);
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  ) {
+    return id;
+  }
+  return undefined;
+}
+
+export function getWahaConfigForAgent(agentId: string): WahaConfig {
+  const baseUrl = process.env.WAHA_BASE_URL?.trim()?.replace(/\/$/, "");
+  if (!baseUrl) {
     throw new Error("WAHA is not configured. Set WAHA_BASE_URL in .env.local");
   }
-  return base.replace(/\/$/, "");
+  const apiKey = process.env.WAHA_API_KEY?.trim() || undefined;
+  return {
+    baseUrl,
+    apiKey,
+    session: wahaSessionForAgent(agentId),
+  };
 }
 
-function getWahaHeaders(): Record<string, string> {
+function getWahaHeaders(config: WahaConfig): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  const apiKey = process.env.WAHA_API_KEY?.trim();
-  if (apiKey) {
-    headers["X-Api-Key"] = apiKey;
+  if (config.apiKey) {
+    headers["X-Api-Key"] = config.apiKey;
   }
   return headers;
 }
 
 export async function wahaFetch(
+  config: WahaConfig,
   path: string,
   init?: RequestInit,
 ): Promise<Response> {
-  const url = `${getWahaBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
+  const url = `${config.baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
   try {
     return await fetch(url, {
       ...init,
       headers: {
-        ...getWahaHeaders(),
+        ...getWahaHeaders(config),
         ...(init?.headers ?? {}),
       },
       signal: init?.signal ?? AbortSignal.timeout(15_000),
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : "network error";
-    throw new Error(`Could not reach WAHA at ${getWahaBaseUrl()}: ${reason}`);
+    throw new Error(`Could not reach WAHA at ${config.baseUrl}: ${reason}`);
   }
 }
 
@@ -53,6 +78,7 @@ type CheckExistsResponse = {
 };
 
 export async function checkWahaContactExists(
+  config: WahaConfig,
   phone: string,
 ): Promise<{ exists: boolean; chatId: string | null }> {
   const normalized = normalizePhoneForWhatsApp(phone);
@@ -64,10 +90,11 @@ export async function checkWahaContactExists(
 
   const params = new URLSearchParams({
     phone: normalized,
-    session: getWahaSession(),
+    session: config.session,
   });
 
   const response = await wahaFetch(
+    config,
     `/api/contacts/check-exists?${params.toString()}`,
   );
   if (!response.ok) {
@@ -89,14 +116,17 @@ type SendTextResponse = {
   key?: { id?: string };
 };
 
-export async function sendWahaTextMessage(input: {
-  chatId: string;
-  text: string;
-}): Promise<{ waMessageId: string | null }> {
-  const response = await wahaFetch("/api/sendText", {
+export async function sendWahaTextMessage(
+  config: WahaConfig,
+  input: {
+    chatId: string;
+    text: string;
+  },
+): Promise<{ waMessageId: string | null }> {
+  const response = await wahaFetch(config, "/api/sendText", {
     method: "POST",
     body: JSON.stringify({
-      session: getWahaSession(),
+      session: config.session,
       chatId: input.chatId,
       text: input.text,
     }),
@@ -124,11 +154,13 @@ export type WahaChatHistoryMessage = {
 };
 
 /** Pull recent messages from WAHA for a chat (used to recover missed webhooks). */
-export async function fetchWahaChatMessages(input: {
-  chatId: string;
-  limit?: number;
-}): Promise<WahaChatHistoryMessage[]> {
-  const session = getWahaSession();
+export async function fetchWahaChatMessages(
+  config: WahaConfig,
+  input: {
+    chatId: string;
+    limit?: number;
+  },
+): Promise<WahaChatHistoryMessage[]> {
   const limit = input.limit ?? 50;
   const params = new URLSearchParams({
     limit: String(limit),
@@ -136,7 +168,8 @@ export async function fetchWahaChatMessages(input: {
   });
 
   const response = await wahaFetch(
-    `/api/${encodeURIComponent(session)}/chats/${encodeURIComponent(input.chatId)}/messages?${params}`,
+    config,
+    `/api/${encodeURIComponent(config.session)}/chats/${encodeURIComponent(input.chatId)}/messages?${params}`,
   );
   if (!response.ok) {
     const text = await response.text().catch(() => "");
@@ -162,7 +195,10 @@ function phoneFromPnChatId(chatId: string): string | null {
 }
 
 /** Map WAHA chat id (@c.us, @s.whatsapp.net, or @lid) to normalized phone digits. */
-export async function resolveWahaChatIdToPhone(chatId: string): Promise<string | null> {
+export async function resolveWahaChatIdToPhone(
+  config: WahaConfig,
+  chatId: string,
+): Promise<string | null> {
   const trimmed = chatId.trim();
   if (!trimmed) return null;
 
@@ -174,9 +210,9 @@ export async function resolveWahaChatIdToPhone(chatId: string): Promise<string |
   }
 
   if (suffix === "lid") {
-    const session = getWahaSession();
     const response = await wahaFetch(
-      `/api/${encodeURIComponent(session)}/lids/${encodeURIComponent(localPart)}`,
+      config,
+      `/api/${encodeURIComponent(config.session)}/lids/${encodeURIComponent(localPart)}`,
     );
     if (!response.ok) return null;
 
@@ -245,22 +281,28 @@ function buildSessionConfig(webhookUrl?: string): WahaSessionConfig | undefined 
   return { webhooks: [webhook] };
 }
 
-export async function syncWahaSessionWebhook(webhookUrl?: string): Promise<void> {
-  const config = buildSessionConfig(webhookUrl);
-  if (!config) {
+export async function syncWahaSessionWebhook(
+  config: WahaConfig,
+  webhookUrl?: string,
+): Promise<void> {
+  const sessionConfig = buildSessionConfig(webhookUrl);
+  if (!sessionConfig) {
     throw new Error(
       "Webhook URL is not configured. Open Settings while deployed or set WAHA_WEBHOOK_BASE_URL.",
     );
   }
 
-  const session = getWahaSession();
-  const response = await wahaFetch(`/api/sessions/${encodeURIComponent(session)}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      name: session,
-      config,
-    }),
-  });
+  const response = await wahaFetch(
+    config,
+    `/api/sessions/${encodeURIComponent(config.session)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        name: config.session,
+        config: sessionConfig,
+      }),
+    },
+  );
 
   if (!response.ok) {
     const text = await response.text();
@@ -270,9 +312,13 @@ export async function syncWahaSessionWebhook(webhookUrl?: string): Promise<void>
   }
 }
 
-export async function getWahaSessionWebhookUrls(): Promise<string[]> {
-  const session = getWahaSession();
-  const response = await wahaFetch(`/api/sessions/${encodeURIComponent(session)}`);
+export async function getWahaSessionWebhookUrls(
+  config: WahaConfig,
+): Promise<string[]> {
+  const response = await wahaFetch(
+    config,
+    `/api/sessions/${encodeURIComponent(config.session)}`,
+  );
   if (!response.ok) return [];
 
   const data = (await response.json()) as {
@@ -290,15 +336,17 @@ export function getWahaDashboardUrl(): string | null {
   return `${base}/dashboard`;
 }
 
-export async function getWahaSessionInfo(): Promise<{
+export async function getWahaSessionInfo(config: WahaConfig): Promise<{
   name: string;
   status: WahaSessionStatus;
   me: { id: string; pushName: string } | null;
 }> {
-  const session = getWahaSession();
-  const response = await wahaFetch(`/api/sessions/${encodeURIComponent(session)}`);
+  const response = await wahaFetch(
+    config,
+    `/api/sessions/${encodeURIComponent(config.session)}`,
+  );
   if (response.status === 404) {
-    return { name: session, status: "STOPPED", me: null };
+    return { name: config.session, status: "STOPPED", me: null };
   }
   if (!response.ok) {
     const text = await response.text();
@@ -314,19 +362,21 @@ export async function getWahaSessionInfo(): Promise<{
       }
     : null;
   return {
-    name: data.name ?? session,
+    name: data.name ?? config.session,
     status: data.status ?? "STOPPED",
     me,
   };
 }
 
-export async function getWahaSessionMe(): Promise<{
+export async function getWahaSessionMe(
+  config: WahaConfig,
+): Promise<{
   id: string;
   pushName: string;
 } | null> {
-  const session = getWahaSession();
   const response = await wahaFetch(
-    `/api/sessions/${encodeURIComponent(session)}/me`,
+    config,
+    `/api/sessions/${encodeURIComponent(config.session)}/me`,
   );
   if (response.status === 404) return null;
   if (!response.ok) return null;
@@ -348,11 +398,16 @@ export async function getWahaSessionMe(): Promise<{
   };
 }
 
-export async function getWahaQrCodeBase64(): Promise<string | null> {
-  const session = getWahaSession();
-  const response = await wahaFetch(`/api/${encodeURIComponent(session)}/auth/qr`, {
-    headers: { Accept: "application/json" },
-  });
+export async function getWahaQrCodeBase64(
+  config: WahaConfig,
+): Promise<string | null> {
+  const response = await wahaFetch(
+    config,
+    `/api/${encodeURIComponent(config.session)}/auth/qr`,
+    {
+      headers: { Accept: "application/json" },
+    },
+  );
   if (!response.ok) {
     const text = await response.text();
     let message = text;
@@ -371,19 +426,22 @@ export async function getWahaQrCodeBase64(): Promise<string | null> {
 }
 
 export async function prepareWahaSessionForQr(
+  config: WahaConfig,
   webhookUrl?: string,
 ): Promise<WahaSessionStatus> {
-  const session = getWahaSession();
-  const config = buildSessionConfig(webhookUrl);
-  const lookup = await wahaFetch(`/api/sessions/${encodeURIComponent(session)}`);
+  const sessionConfig = buildSessionConfig(webhookUrl);
+  const lookup = await wahaFetch(
+    config,
+    `/api/sessions/${encodeURIComponent(config.session)}`,
+  );
 
   if (lookup.status === 404) {
-    const create = await wahaFetch("/api/sessions", {
+    const create = await wahaFetch(config, "/api/sessions", {
       method: "POST",
       body: JSON.stringify({
-        name: session,
+        name: config.session,
         start: true,
-        config,
+        config: sessionConfig,
       }),
     });
     if (!create.ok) {
@@ -395,11 +453,12 @@ export async function prepareWahaSessionForQr(
   } else if (lookup.ok) {
     const current = (await lookup.json()) as WahaSessionResponse;
     if (webhookUrl) {
-      await syncWahaSessionWebhook(webhookUrl);
+      await syncWahaSessionWebhook(config, webhookUrl);
     }
     if (current.status === "STOPPED" || current.status === "FAILED") {
       const start = await wahaFetch(
-        `/api/sessions/${encodeURIComponent(session)}/start`,
+        config,
+        `/api/sessions/${encodeURIComponent(config.session)}/start`,
         { method: "POST" },
       );
       if (!start.ok) {
@@ -417,23 +476,24 @@ export async function prepareWahaSessionForQr(
   }
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const info = await getWahaSessionInfo();
+    const info = await getWahaSessionInfo(config);
     if (info.status === "SCAN_QR_CODE" || info.status === "WORKING") {
       return info.status;
     }
     await sleep(1000);
   }
 
-  const final = await getWahaSessionInfo();
+  const final = await getWahaSessionInfo(config);
   return final.status;
 }
 
 export async function fetchWahaQrCodeWithRetry(
+  config: WahaConfig,
   maxAttempts = 8,
 ): Promise<string | null> {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      const qr = await getWahaQrCodeBase64();
+      const qr = await getWahaQrCodeBase64(config);
       if (qr) return qr;
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
@@ -447,41 +507,48 @@ export async function fetchWahaQrCodeWithRetry(
   return null;
 }
 
-export async function ensureWahaSessionStarted(webhookUrl?: string): Promise<void> {
-  const session = getWahaSession();
-  const lookup = await wahaFetch(`/api/sessions/${encodeURIComponent(session)}`);
-  const config = buildSessionConfig(webhookUrl);
+export async function ensureWahaSessionStarted(
+  config: WahaConfig,
+  webhookUrl?: string,
+): Promise<void> {
+  const lookup = await wahaFetch(
+    config,
+    `/api/sessions/${encodeURIComponent(config.session)}`,
+  );
+  const sessionConfig = buildSessionConfig(webhookUrl);
 
   if (lookup.status === 404) {
-    await wahaFetch("/api/sessions", {
+    await wahaFetch(config, "/api/sessions", {
       method: "POST",
       body: JSON.stringify({
-        name: session,
+        name: config.session,
         start: true,
-        config,
+        config: sessionConfig,
       }),
     });
     return;
   }
 
   if (webhookUrl) {
-    await syncWahaSessionWebhook(webhookUrl);
+    await syncWahaSessionWebhook(config, webhookUrl);
   }
 
   const info = lookup.ok
     ? ((await lookup.json()) as WahaSessionResponse)
     : null;
   if (info?.status === "STOPPED" || info?.status === "FAILED") {
-    await wahaFetch(`/api/sessions/${encodeURIComponent(session)}/start`, {
-      method: "POST",
-    });
+    await wahaFetch(
+      config,
+      `/api/sessions/${encodeURIComponent(config.session)}/start`,
+      { method: "POST" },
+    );
   }
 }
 
-export async function restartWahaSession(): Promise<void> {
-  const session = getWahaSession();
+export async function restartWahaSession(config: WahaConfig): Promise<void> {
   const response = await wahaFetch(
-    `/api/sessions/${encodeURIComponent(session)}/restart`,
+    config,
+    `/api/sessions/${encodeURIComponent(config.session)}/restart`,
     { method: "POST" },
   );
   if (!response.ok) {
@@ -492,10 +559,10 @@ export async function restartWahaSession(): Promise<void> {
   }
 }
 
-export async function logoutWahaSession(): Promise<void> {
-  const session = getWahaSession();
+export async function logoutWahaSession(config: WahaConfig): Promise<void> {
   const response = await wahaFetch(
-    `/api/sessions/${encodeURIComponent(session)}/logout`,
+    config,
+    `/api/sessions/${encodeURIComponent(config.session)}/logout`,
     { method: "POST" },
   );
   if (!response.ok) {
@@ -506,11 +573,14 @@ export async function logoutWahaSession(): Promise<void> {
   }
 }
 
-export async function startWahaSession(webhookUrl?: string): Promise<void> {
-  const session = getWahaSession();
-  await ensureWahaSessionStarted(webhookUrl);
+export async function startWahaSession(
+  config: WahaConfig,
+  webhookUrl?: string,
+): Promise<void> {
+  await ensureWahaSessionStarted(config, webhookUrl);
   const response = await wahaFetch(
-    `/api/sessions/${encodeURIComponent(session)}/start`,
+    config,
+    `/api/sessions/${encodeURIComponent(config.session)}/start`,
     { method: "POST" },
   );
   if (!response.ok) {

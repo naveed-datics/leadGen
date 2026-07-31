@@ -34,13 +34,13 @@ Copy `.env.local.example` to `.env.local` and set:
 SERPAPI_API_KEY=your_serpapi_key
 DATABASE_URL=postgresql://user:password@host/neondb?sslmode=require
 WAHA_BASE_URL=https://your-waha-host.example.com
-WAHA_SESSION=default
+WAHA_API_KEY=optional-waha-api-key
 CRON_SECRET=generate-a-random-secret
 ```
 
 - **SerpApi**: [serpapi.com](https://serpapi.com/)
 - **Neon**: [neon.tech](https://neon.tech) — paste your connection string as `DATABASE_URL`
-- **WAHA**: [waha.devlike.pro](https://waha.devlike.pro/) — self-hosted WhatsApp HTTP API
+- **WAHA**: [waha.devlike.pro](https://waha.devlike.pro/) — shared WhatsApp HTTP API. Each agent gets their own session (`agent_<id>`) and links their number via Settings → QR code. `WAHA_SESSION` is no longer used.
 
 ### 3. WAHA webhook (inbound replies)
 

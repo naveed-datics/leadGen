@@ -6,6 +6,7 @@ import { optionalCustomerChatId, hasCustomerChatIdColumn } from "@/lib/integrati
 import {
   checkWahaContactExists,
   fetchWahaChatMessages,
+  getWahaConfigForAgent,
   isWahaConfigured,
 } from "@/lib/integrations/waha";
 
@@ -32,6 +33,7 @@ export async function syncConversationMessagesFromWaha(input: {
 
   if (!conv || conv.agentId !== input.agentId) return { imported: 0 };
 
+  const wahaConfig = getWahaConfigForAgent(input.agentId);
   let chatId: string | null = null;
 
   if (await hasCustomerChatIdColumn()) {
@@ -44,7 +46,10 @@ export async function syncConversationMessagesFromWaha(input: {
   }
   if (!chatId) {
     try {
-      const contact = await checkWahaContactExists(conv.customerPhone);
+      const contact = await checkWahaContactExists(
+        wahaConfig,
+        conv.customerPhone,
+      );
       chatId = contact.chatId;
       if (chatId) {
         const chatIdFields = await optionalCustomerChatId(chatId);
@@ -64,7 +69,7 @@ export async function syncConversationMessagesFromWaha(input: {
 
   let history;
   try {
-    history = await fetchWahaChatMessages({ chatId, limit: 50 });
+    history = await fetchWahaChatMessages(wahaConfig, { chatId, limit: 50 });
   } catch (error) {
     console.warn("[waha-sync] fetch messages failed:", error);
     return { imported: 0 };

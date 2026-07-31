@@ -4,8 +4,8 @@ import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { whatsappConversations } from "@/lib/db/schema";
 import {
+  getWahaConfigForAgent,
   getWahaDashboardUrl,
-  getWahaSession,
   getWahaSessionInfo,
   getWahaSessionMe,
   getWahaSessionWebhookUrls,
@@ -28,12 +28,13 @@ export async function GET(request: Request) {
     const origin = new URL(request.url).origin;
     const webhookUrl = getWebhookUrlForAgent(agent.id, origin);
     const dashboardUrl = getWahaDashboardUrl();
+    const wahaConfig = configured ? getWahaConfigForAgent(agent.id) : null;
 
-    if (!configured) {
+    if (!configured || !wahaConfig) {
       return NextResponse.json({
         configured: false,
         whatsAppEnabled: agent.whatsAppEnabled,
-        session: getWahaSession(),
+        session: `agent_${agent.id}`,
         status: "NOT_CONFIGURED",
         connected: false,
         linkedName: null,
@@ -50,11 +51,11 @@ export async function GET(request: Request) {
     let connected = false;
 
     try {
-      const session = await getWahaSessionInfo();
+      const session = await getWahaSessionInfo(wahaConfig);
       status = session.status;
       connected = status === "WORKING";
 
-      const me = session.me ?? (await getWahaSessionMe().catch(() => null));
+      const me = session.me ?? (await getWahaSessionMe(wahaConfig).catch(() => null));
       if (me) {
         linkedName = me.pushName;
         linkedPhone = phoneFromWahaId(me.id);
@@ -90,7 +91,7 @@ export async function GET(request: Request) {
       }
 
       try {
-        const registered = await getWahaSessionWebhookUrls();
+        const registered = await getWahaSessionWebhookUrls(wahaConfig);
         webhookConfigured = registered.includes(webhookUrl);
       } catch {
         webhookConfigured = false;
@@ -102,7 +103,7 @@ export async function GET(request: Request) {
         !webhookReachabilityWarning
       ) {
         try {
-          await syncWahaSessionWebhook(webhookUrl);
+          await syncWahaSessionWebhook(wahaConfig, webhookUrl);
           webhookConfigured = true;
         } catch {
           webhookConfigured = false;
@@ -116,7 +117,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       configured: true,
       whatsAppEnabled: agent.whatsAppEnabled,
-      session: getWahaSession(),
+      session: wahaConfig.session,
       status,
       connected,
       linkedName,

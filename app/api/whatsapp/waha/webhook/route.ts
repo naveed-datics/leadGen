@@ -3,6 +3,7 @@ import {
   handleWahaWebhook,
   type WahaWebhookBody,
 } from "@/lib/integrations/waha-webhook";
+import { agentIdFromWahaSession } from "@/lib/integrations/waha";
 
 function verifyWebhookSecret(request: Request): boolean {
   const secret = process.env.WAHA_WEBHOOK_SECRET?.trim();
@@ -27,7 +28,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    await handleWahaWebhook(body);
+    const agentId = agentIdFromWahaSession(body.session);
+    await handleWahaWebhook(body, agentId ? { agentId } : undefined);
   } catch (error) {
     console.error("[waha-webhook] handler failed:", error);
   }

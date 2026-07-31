@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db/index";
 import { leads, searches, whatsappConversations, whatsappMessages } from "@/lib/db/schema";
 import {
   checkWahaContactExists,
+  getWahaConfigForAgent,
   sendWahaTextMessage,
 } from "@/lib/integrations/waha";
 import { optionalCustomerChatId } from "@/lib/integrations/customer-chat-id-column";
@@ -145,12 +146,13 @@ export async function sendWhatsAppMessageToLead(
     }
   }
 
-  const contact = await checkWahaContactExists(targetPhone);
+  const wahaConfig = getWahaConfigForAgent(input.agentId);
+  const contact = await checkWahaContactExists(wahaConfig, targetPhone);
   if (!contact.exists || !contact.chatId) {
     throw new WhatsAppSendError("This number is not on WhatsApp", 400);
   }
 
-  const { waMessageId } = await sendWahaTextMessage({
+  const { waMessageId } = await sendWahaTextMessage(wahaConfig, {
     chatId: contact.chatId,
     text: proposalBody,
   });

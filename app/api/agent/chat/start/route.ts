@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db/index";
 import { whatsappConversations, whatsappMessages } from "@/lib/db/schema";
 import {
   checkWahaContactExists,
+  getWahaConfigForAgent,
   isWahaConfigured,
   sendWahaTextMessage,
 } from "@/lib/integrations/waha";
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "WhatsApp is not configured. Set WAHA_BASE_URL and WAHA_SESSION in .env.local",
+          "WhatsApp is not configured on this server. Ask an admin to set WAHA_BASE_URL.",
       },
       { status: 403 },
     );
@@ -78,9 +79,10 @@ export async function POST(request: Request) {
 
   const businessName = parsed.data.businessName?.trim() || normalizedPhone;
   const industry = parsed.data.industry?.trim() || null;
+  const wahaConfig = getWahaConfigForAgent(agent.id);
 
   try {
-    const contact = await checkWahaContactExists(parsed.data.phone);
+    const contact = await checkWahaContactExists(wahaConfig, parsed.data.phone);
     if (!contact.exists || !contact.chatId) {
       return NextResponse.json(
         { error: "This number is not on WhatsApp" },
@@ -88,7 +90,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { waMessageId } = await sendWahaTextMessage({
+    const { waMessageId } = await sendWahaTextMessage(wahaConfig, {
       chatId: contact.chatId,
       text,
     });

@@ -20,16 +20,24 @@ export function buildWhatsAppUrl(phone: string): string | null {
   return `https://wa.me/${normalized}`;
 }
 
-export async function checkWhatsAppExists(phone: string): Promise<boolean> {
+export async function checkWhatsAppExists(
+  phone: string,
+  agentId?: string,
+): Promise<boolean> {
   const normalized = normalizePhoneForWhatsApp(phone);
   if (!normalized) return false;
 
-  const { isWahaConfigured, checkWahaContactExists } = await import(
-    "@/lib/integrations/waha"
-  );
-  if (isWahaConfigured()) {
+  const {
+    isWahaConfigured,
+    checkWahaContactExists,
+    getWahaConfigForAgent,
+  } = await import("@/lib/integrations/waha");
+  if (isWahaConfigured() && agentId) {
     try {
-      const result = await checkWahaContactExists(phone);
+      const result = await checkWahaContactExists(
+        getWahaConfigForAgent(agentId),
+        phone,
+      );
       return result.exists;
     } catch {
       return checkViaWhatsAppWeb(normalized);
@@ -70,9 +78,14 @@ export function buildChatId(phone: string): string | null {
 export async function sendWhatsAppMessage(
   phone: string,
   message: string,
+  agentId: string,
 ): Promise<void> {
-  const { isWahaConfigured, checkWahaContactExists, sendWahaTextMessage } =
-    await import("@/lib/integrations/waha");
+  const {
+    isWahaConfigured,
+    checkWahaContactExists,
+    getWahaConfigForAgent,
+    sendWahaTextMessage,
+  } = await import("@/lib/integrations/waha");
 
   if (!isWahaConfigured()) {
     throw new Error(
@@ -80,12 +93,13 @@ export async function sendWhatsAppMessage(
     );
   }
 
-  const { exists, chatId } = await checkWahaContactExists(phone);
+  const wahaConfig = getWahaConfigForAgent(agentId);
+  const { exists, chatId } = await checkWahaContactExists(wahaConfig, phone);
   if (!exists || !chatId) {
     throw new Error("This number is not on WhatsApp");
   }
 
-  await sendWahaTextMessage({ chatId, text: message });
+  await sendWahaTextMessage(wahaConfig, { chatId, text: message });
 }
 
 export { isWahaConfigured } from "@/lib/integrations/waha";
