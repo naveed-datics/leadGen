@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -183,7 +184,11 @@ export const proposals = pgTable("proposals", {
   demoRequestedAt: timestamp("demo_requested_at", { withTimezone: true }),
   wpDemoPageId: integer("wp_demo_page_id"),
   sentAt: timestamp("sent_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  readAt: timestamp("read_at", { withTimezone: true }),
   repliedAt: timestamp("replied_at", { withTimezone: true }),
+  /** WAHA message id from the initial proposal send (for ack matching). */
+  outboundWaMessageId: text("outbound_wa_message_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -273,19 +278,25 @@ export const whatsappConversations = pgTable("whatsapp_conversations", {
     .notNull(),
 });
 
-export const whatsappMessages = pgTable("whatsapp_messages", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  conversationId: uuid("conversation_id")
-    .notNull()
-    .references(() => whatsappConversations.id, { onDelete: "cascade" }),
-  direction: text("direction").notNull(), // inbound | outbound
-  body: text("body").notNull(),
-  waMessageId: text("wa_message_id"),
-  status: text("status").notNull().default("sent"), // sent | delivered | read | failed
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const whatsappMessages = pgTable(
+  "whatsapp_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => whatsappConversations.id, { onDelete: "cascade" }),
+    direction: text("direction").notNull(), // inbound | outbound
+    body: text("body").notNull(),
+    waMessageId: text("wa_message_id"),
+    status: text("status").notNull().default("sent"), // sent | delivered | read | failed
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("whatsapp_messages_wa_message_id_idx").on(table.waMessageId),
+  ],
+);
 
 export const searchesRelations = relations(searches, ({ many }) => ({
   leads: many(leads),

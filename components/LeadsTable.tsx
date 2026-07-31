@@ -7,7 +7,11 @@ import {
   DEMO_STATUS_BUILDING,
   DEMO_STATUS_FAILED,
 } from "@/lib/demo-status";
-import { isProposalReplied, isProposalSent } from "@/lib/proposal-status";
+import {
+  getProposalWhatsAppDeliveryLabel,
+  isProposalReplied,
+  isProposalSent,
+} from "@/lib/proposal-status";
 import type { LeadWithProposal, SearchDetail } from "@/lib/types";
 
 const STALE_BUILD_MS = 15 * 60 * 1000;
@@ -98,6 +102,18 @@ export function LeadsTable({
                         Replied {formatRelativeTime(lead.proposal.repliedAt)}
                       </p>
                     )}
+                    {lead.proposal && isProposalSent(lead.proposal.status) && (
+                      <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                        {getProposalWhatsAppDeliveryLabel(lead.proposal)}
+                        {lead.proposal.readAt
+                          ? ` ${formatRelativeTime(lead.proposal.readAt)}`
+                          : lead.proposal.deliveredAt
+                            ? ` ${formatRelativeTime(lead.proposal.deliveredAt)}`
+                            : lead.proposal.sentAt
+                              ? ` ${formatRelativeTime(lead.proposal.sentAt)}`
+                              : ""}
+                      </p>
+                    )}
                     {lead.proposal && isProposalSent(lead.proposal.status) && lead.proposal.followUpLabel && (
                       <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
                         {lead.proposal.followUpLabel}
@@ -159,6 +175,18 @@ export function LeadsTable({
               {lead.proposal && isProposalReplied(lead.proposal.status) && (
                 <p className="text-xs font-medium text-sky-700 dark:text-sky-300">
                   Replied {formatRelativeTime(lead.proposal.repliedAt)}
+                </p>
+              )}
+              {lead.proposal && isProposalSent(lead.proposal.status) && (
+                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                  {getProposalWhatsAppDeliveryLabel(lead.proposal)}
+                  {lead.proposal.readAt
+                    ? ` ${formatRelativeTime(lead.proposal.readAt)}`
+                    : lead.proposal.deliveredAt
+                      ? ` ${formatRelativeTime(lead.proposal.deliveredAt)}`
+                      : lead.proposal.sentAt
+                        ? ` ${formatRelativeTime(lead.proposal.sentAt)}`
+                        : ""}
                 </p>
               )}
               {lead.proposal && isProposalSent(lead.proposal.status) && lead.proposal.followUpLabel && (

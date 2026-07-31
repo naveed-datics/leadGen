@@ -465,8 +465,28 @@ export default function AgentChatPage() {
                       }`}
                     >
                       <div className="whitespace-pre-wrap">{m.body}</div>
-                      <div className="mt-1 text-[10px] opacity-70">
-                        {new Date(m.createdAt).toLocaleString()}
+                      <div className="mt-1 flex items-center justify-end gap-1.5 text-[10px] opacity-70">
+                        <span>{new Date(m.createdAt).toLocaleString()}</span>
+                        {m.direction === "outbound" && (
+                          <span
+                            title={m.status}
+                            className={
+                              m.status === "read"
+                                ? "text-sky-200"
+                                : m.status === "failed"
+                                  ? "text-red-200"
+                                  : ""
+                            }
+                          >
+                            {m.status === "read"
+                              ? "✓✓"
+                              : m.status === "delivered"
+                                ? "✓✓"
+                                : m.status === "failed"
+                                  ? "!"
+                                  : "✓"}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

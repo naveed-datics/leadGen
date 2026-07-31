@@ -134,6 +134,8 @@ export function serializeProposal(proposal: {
   status: string;
   body: string;
   sentAt: Date | null;
+  deliveredAt?: Date | null;
+  readAt?: Date | null;
   repliedAt: Date | null;
   demoUrl?: string | null;
   demoStatus?: string | null;
@@ -143,6 +145,8 @@ export function serializeProposal(proposal: {
     status: proposal.status,
     body: proposal.body,
     sentAt: proposal.sentAt?.toISOString() ?? null,
+    deliveredAt: proposal.deliveredAt?.toISOString() ?? null,
+    readAt: proposal.readAt?.toISOString() ?? null,
     repliedAt: proposal.repliedAt?.toISOString() ?? null,
     demoUrl: proposal.demoUrl ?? null,
     demoStatus: proposal.demoStatus ?? "none",

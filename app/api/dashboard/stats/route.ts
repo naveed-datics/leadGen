@@ -24,6 +24,8 @@ export async function GET() {
         totalLeads: sql<number>`count(${leads.id})`,
         proposalsInProgress: sql<number>`sum(case when ${proposals.status} in ('in_progress', 'draft') then 1 else 0 end)`,
         proposalsSent: sql<number>`sum(case when ${proposals.status} = 'sent' then 1 else 0 end)`,
+        proposalsDelivered: sql<number>`sum(case when ${proposals.deliveredAt} is not null and ${proposals.status} in ('sent', 'replied') then 1 else 0 end)`,
+        proposalsRead: sql<number>`sum(case when ${proposals.readAt} is not null and ${proposals.status} in ('sent', 'replied') then 1 else 0 end)`,
         proposalsReplied: sql<number>`sum(case when ${proposals.status} = 'replied' then 1 else 0 end)`,
       })
       .from(leads)
@@ -37,6 +39,8 @@ export async function GET() {
         totalLeads: Number(row?.totalLeads ?? 0),
         proposalsInProgress: Number(row?.proposalsInProgress ?? 0),
         proposalsSent: Number(row?.proposalsSent ?? 0),
+        proposalsDelivered: Number(row?.proposalsDelivered ?? 0),
+        proposalsRead: Number(row?.proposalsRead ?? 0),
         proposalsReplied: Number(row?.proposalsReplied ?? 0),
       },
     });

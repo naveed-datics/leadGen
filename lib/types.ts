@@ -89,6 +89,8 @@ export interface ProposalSummary {
   status: ProposalStatus;
   body: string;
   sentAt: string | null;
+  deliveredAt?: string | null;
+  readAt?: string | null;
   repliedAt: string | null;
   demoUrl: string | null;
   demoStatus?: "none" | "building" | "ready" | "failed";

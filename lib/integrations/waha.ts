@@ -234,7 +234,7 @@ function buildSessionConfig(webhookUrl?: string): WahaSessionConfig | undefined 
 
   const webhook: WahaWebhookConfig = {
     url: webhookUrl,
-    events: ["message", "message.any"],
+    events: ["message", "message.any", "message.ack"],
   };
 
   const secret = process.env.WAHA_WEBHOOK_SECRET?.trim();

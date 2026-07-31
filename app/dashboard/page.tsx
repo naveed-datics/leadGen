@@ -19,6 +19,8 @@ type DashboardStatsResponse =
         totalLeads: number;
         proposalsInProgress: number;
         proposalsSent: number;
+        proposalsDelivered: number;
+        proposalsRead: number;
         proposalsReplied: number;
       };
     }
@@ -175,6 +177,8 @@ export default function DashboardPage() {
     totalLeads: number;
     proposalsInProgress: number;
     proposalsSent: number;
+    proposalsDelivered: number;
+    proposalsRead: number;
     proposalsReplied: number;
   } | null>(null);
 
@@ -274,6 +278,9 @@ export default function DashboardPage() {
               <div className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
                 {stats.proposalsSent}
               </div>
+              <p className="mt-2 text-xs text-zinc-500">
+                Delivered {stats.proposalsDelivered} · Seen {stats.proposalsRead}
+              </p>
             </Link>
             <Link
               href="/proposals/replied"

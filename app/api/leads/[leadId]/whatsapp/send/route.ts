@@ -99,7 +99,7 @@ export async function POST(
       );
     }
 
-    await sendWhatsAppMessageToLead({
+    const { waMessageId } = await sendWhatsAppMessageToLead({
       leadId,
       agentId: agent.id,
       body: proposalBody,
@@ -124,6 +124,9 @@ export async function POST(
           body: proposalBody,
           status: "sent",
           sentAt: now,
+          deliveredAt: null,
+          readAt: null,
+          outboundWaMessageId: waMessageId,
           updatedAt: now,
         })
         .where(eq(proposals.id, existing.id))
@@ -136,6 +139,7 @@ export async function POST(
           body: proposalBody,
           status: "sent",
           sentAt: now,
+          outboundWaMessageId: waMessageId,
         })
         .returning();
     }

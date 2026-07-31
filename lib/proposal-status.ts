@@ -16,3 +16,15 @@ export function isProposalReplied(status: string): boolean {
 export const PROPOSAL_STATUS_IN_PROGRESS = "in_progress" as const;
 export const PROPOSAL_STATUS_SENT = "sent" as const;
 export const PROPOSAL_STATUS_REPLIED = "replied" as const;
+
+/** Delivery/seen label for a sent proposal (null when not applicable). */
+export function getProposalWhatsAppDeliveryLabel(proposal: {
+  status: string;
+  deliveredAt?: string | null;
+  readAt?: string | null;
+}): "Seen" | "Delivered" | "Sent" | null {
+  if (!isProposalSent(proposal.status)) return null;
+  if (proposal.readAt) return "Seen";
+  if (proposal.deliveredAt) return "Delivered";
+  return "Sent";
+}

@@ -10,6 +10,8 @@ type ProposalRow = {
   demoUrl: string | null;
   demoStatus: string;
   sentAt: string | null;
+  deliveredAt: string | null;
+  readAt: string | null;
   repliedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -146,6 +148,15 @@ export function ProposalsListPage({
                         {row.agentName && (
                           <p className="text-xs text-zinc-500">
                             Agent: {row.agentName}
+                          </p>
+                        )}
+                        {status === "sent" && (
+                          <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                            {row.readAt
+                              ? "Seen"
+                              : row.deliveredAt
+                                ? "Delivered"
+                                : "Sent"}
                           </p>
                         )}
                       </td>

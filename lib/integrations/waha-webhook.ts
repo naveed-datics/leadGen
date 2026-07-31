@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/schema";
 import { processInboundLeadFollowUp } from "@/lib/integrations/inbound-lead-followup";
 import { ensureInboundLeadFromReply } from "@/lib/integrations/inbound-lead-create";
+import { handleWahaMessageAck } from "@/lib/integrations/waha-message-ack";
 import { resolveWahaChatIdToPhone } from "@/lib/integrations/waha";
 import { getWhatsAppConfig } from "@/lib/integrations/whatsapp-config";
 import {
@@ -22,6 +23,8 @@ type WahaMessagePayload = {
   fromMe?: boolean;
   body?: string;
   hasMedia?: boolean;
+  ack?: number;
+  ackName?: string;
 };
 
 export type WahaWebhookBody = {
@@ -213,6 +216,16 @@ export async function handleWahaWebhook(
   options?: HandleWahaWebhookOptions,
 ): Promise<void> {
   const event = body.event?.trim() ?? "";
+
+  if (event === "message.ack") {
+    try {
+      await handleWahaMessageAck(body.payload);
+    } catch (error) {
+      console.warn("[waha-webhook] message.ack handling failed:", error);
+    }
+    return;
+  }
+
   if (event !== "message" && event !== "message.any") return;
 
   const payload = body.payload;
