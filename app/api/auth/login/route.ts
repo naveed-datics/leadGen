@@ -18,8 +18,29 @@ function safeNextPath(next: string | null): string | null {
   return next;
 }
 
+function isHtmlFormPost(contentType: string): boolean {
+  return (
+    !contentType.includes("application/json") &&
+    (contentType.includes("application/x-www-form-urlencoded") ||
+      contentType.includes("multipart/form-data"))
+  );
+}
+
+function formErrorRedirect(
+  request: Request,
+  error: string,
+  next: string | null,
+): NextResponse {
+  const url = new URL("/login", request.url);
+  url.searchParams.set("error", error);
+  if (next) url.searchParams.set("next", next);
+  // 303 See Other: after POST, force the browser to follow with GET.
+  return NextResponse.redirect(url, 303);
+}
+
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
+  const formPost = isHtmlFormPost(contentType);
 
   let json: unknown;
   let next: string | null = null;
@@ -35,6 +56,9 @@ export async function POST(request: Request) {
     try {
       form = await request.formData();
     } catch {
+      if (formPost) {
+        return formErrorRedirect(request, "invalid", next);
+      }
       return NextResponse.json({ error: "Invalid form body" }, { status: 400 });
     }
     json = {
@@ -46,6 +70,9 @@ export async function POST(request: Request) {
 
   const parsed = LoginSchema.safeParse(json);
   if (!parsed.success) {
+    if (formPost) {
+      return formErrorRedirect(request, "invalid", next);
+    }
     return NextResponse.json({ error: "Invalid credentials" }, { status: 400 });
   }
 
@@ -63,32 +90,42 @@ export async function POST(request: Request) {
     .where(eq(users.email, email.toLowerCase().trim()));
 
   if (!user) {
+    if (formPost) {
+      return formErrorRedirect(request, "credentials", next);
+    }
     return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
   }
 
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) {
+    if (formPost) {
+      return formErrorRedirect(request, "credentials", next);
+    }
     return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
   }
 
   const role = user.role === "admin" ? "admin" : user.role === "agent" ? "agent" : null;
   if (!role) {
+    if (formPost) {
+      return formErrorRedirect(request, "role", next);
+    }
     return NextResponse.json({ error: "Invalid account role" }, { status: 401 });
   }
 
   if (role === "agent" && !user.active) {
+    if (formPost) {
+      return formErrorRedirect(request, "inactive", next);
+    }
     return NextResponse.json({ error: "Account is inactive" }, { status: 403 });
   }
 
   const token = await signAuthToken({ sub: user.id, role });
 
   // If this came from an HTML form, redirect to the original destination or the dashboard.
-  const wantsRedirect =
-    !contentType.includes("application/json") &&
-    contentType.includes("application/x-www-form-urlencoded");
-
-  const response = wantsRedirect
-    ? NextResponse.redirect(new URL(next ?? "/dashboard", request.url))
+  // 303 See Other: after POST, force the browser to follow with GET.
+  // Default 307 would re-POST to /dashboard and produce 405 Method Not Allowed.
+  const response = formPost
+    ? NextResponse.redirect(new URL(next ?? "/dashboard", request.url), 303)
     : NextResponse.json({ ok: true });
   response.cookies.set(authCookieName(), token, {
     httpOnly: true,
@@ -100,4 +137,3 @@ export async function POST(request: Request) {
 
   return response;
 }
-

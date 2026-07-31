@@ -1,11 +1,19 @@
 import { LeadGenLogo } from "@/components/LeadGenLogo";
 
+const ERROR_MESSAGES: Record<string, string> = {
+  credentials: "Invalid email or password.",
+  invalid: "Please enter a valid email and password.",
+  role: "This account cannot sign in.",
+  inactive: "This account is inactive. Contact an admin.",
+};
+
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; error?: string }>;
 }) {
-  const { next } = await searchParams;
+  const { next, error } = await searchParams;
+  const errorMessage = error ? ERROR_MESSAGES[error] ?? "Unable to sign in. Try again." : null;
 
   return (
     <main className="grid min-h-[100dvh] bg-zinc-50 dark:bg-zinc-950 lg:grid-cols-[minmax(20rem,0.8fr)_1.2fr]">
@@ -46,6 +54,14 @@ export default async function LoginPage({
 
           <form className="mt-8 space-y-5" method="post" action="/api/auth/login">
             {next && <input type="hidden" name="next" value={next} />}
+            {errorMessage && (
+              <p
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
+              >
+                {errorMessage}
+              </p>
+            )}
             <label className="block">
               <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                 Email
