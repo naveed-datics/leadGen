@@ -513,7 +513,10 @@ export default function SearchDetailPage() {
         searchId={search.id}
         searchQuery={search.query}
         onClose={() => setSearchSettingsOpen(false)}
-        onSaved={() => void loadDemoEnabled()}
+        onSaved={() => {
+          void loadDemoEnabled();
+          void loadSearch({ silent: true });
+        }}
       />
 
       {activeLead && (
