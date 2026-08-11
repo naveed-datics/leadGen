@@ -356,6 +356,8 @@ export type DemoBuildAccepted = {
   message?: string;
   leadId: string;
   statusUrl?: string;
+  /** demoGen's own internal Lead.id, when returned — powers the Edit Demo proxy. */
+  internalLeadId?: string;
 };
 
 export function isDemoBuildAccepted(
@@ -430,6 +432,7 @@ export async function requestDemoBuild({
         message: parsed.message,
         leadId: parsed.leadId,
         statusUrl: asyncPollTarget,
+        internalLeadId: parsed.internalLeadId,
       };
     }
 

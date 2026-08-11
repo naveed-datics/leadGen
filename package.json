@@ -12,6 +12,7 @@
     "db:migrate:customer-chat-id": "tsx scripts/apply-customer-chat-id-migration.ts",
     "db:migrate:industries": "tsx scripts/apply-industries-migration.ts",
     "db:migrate:proposal-delivery": "tsx scripts/apply-proposal-delivery-migration.ts",
+    "db:migrate:demo-gen-integration": "tsx scripts/apply-demo-gen-integration-migration.ts",
     "db:studio": "drizzle-kit studio",
     "cron:follow-ups": "tsx scripts/cron-follow-ups.ts"
   },

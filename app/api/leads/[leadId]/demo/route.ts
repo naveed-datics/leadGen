@@ -130,6 +130,13 @@ export async function POST(
 
     // Async: demoGen builds in the background and POSTs the demo URL back.
     if (isDemoBuildAccepted(buildResult)) {
+      if (buildResult.internalLeadId) {
+        await db
+          .update(proposals)
+          .set({ demoGenLeadId: buildResult.internalLeadId, updatedAt: new Date() })
+          .where(eq(proposals.leadId, leadId));
+      }
+
       const [buildingProposal] = await db
         .select()
         .from(proposals)

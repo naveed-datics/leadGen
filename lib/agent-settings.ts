@@ -139,6 +139,7 @@ export function serializeProposal(proposal: {
   repliedAt: Date | null;
   demoUrl?: string | null;
   demoStatus?: string | null;
+  demoGenLeadId?: string | null;
 }) {
   return {
     id: proposal.id,
@@ -150,5 +151,6 @@ export function serializeProposal(proposal: {
     repliedAt: proposal.repliedAt?.toISOString() ?? null,
     demoUrl: proposal.demoUrl ?? null,
     demoStatus: proposal.demoStatus ?? "none",
+    demoGenLeadId: proposal.demoGenLeadId ?? null,
   };
 }

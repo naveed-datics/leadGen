@@ -13,6 +13,7 @@ type Demo = {
   hasProposal: boolean;
   demoUrl: string | null;
   demoRequestedAt: string | null;
+  demoGenLeadId: string | null;
   updatedAt: string;
 };
 
@@ -139,6 +140,15 @@ export default function DemosPage() {
                         >
                           View demo
                         </a>
+                      )}
+                      {demo.demoGenLeadId && (
+                        <Link
+                          href={`/demos/${demo.leadId}/edit`}
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-900 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-white"
+                          aria-label={`Edit demo for ${demo.title}`}
+                        >
+                          Edit demo
+                        </Link>
                       )}
                       <Link
                         href={{

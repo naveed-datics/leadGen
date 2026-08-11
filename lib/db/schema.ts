@@ -183,6 +183,8 @@ export const proposals = pgTable("proposals", {
   demoStatus: text("demo_status").notNull().default("none"), // none | building | ready | failed
   demoRequestedAt: timestamp("demo_requested_at", { withTimezone: true }),
   wpDemoPageId: integer("wp_demo_page_id"),
+  /** demoGen's internal Lead.id (Prisma cuid string) — powers the Edit Demo proxy. */
+  demoGenLeadId: text("demo_gen_lead_id"),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   readAt: timestamp("read_at", { withTimezone: true }),

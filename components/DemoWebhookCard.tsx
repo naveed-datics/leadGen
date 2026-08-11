@@ -133,7 +133,9 @@ export function DemoWebhookCard() {
         <h2 className="text-sm font-semibold">Demo webhook</h2>
         <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
           Configure the webhook used to generate personalized demo sites for
-          proposals.
+          proposals. This API key is also used by the Edit Demo button on the
+          Demos list, so LeadGen can push branding and page changes to the demo
+          builder on your behalf.
         </p>
 
         <div className="mt-4 space-y-3">

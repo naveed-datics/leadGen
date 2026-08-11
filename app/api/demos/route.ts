@@ -28,6 +28,7 @@ export async function GET() {
         proposalBody: proposals.body,
         demoUrl: proposals.demoUrl,
         demoRequestedAt: proposals.demoRequestedAt,
+        demoGenLeadId: proposals.demoGenLeadId,
         updatedAt: proposals.updatedAt,
       })
       .from(leads)
@@ -52,6 +53,7 @@ export async function GET() {
         hasProposal: Boolean((row.proposalBody ?? "").trim()),
         demoUrl: row.demoUrl,
         demoRequestedAt: row.demoRequestedAt?.toISOString() ?? null,
+        demoGenLeadId: row.demoGenLeadId,
         updatedAt: row.updatedAt.toISOString(),
       })),
     });
