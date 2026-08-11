@@ -220,7 +220,12 @@ export async function POST(
   }
 }
 
-/** DELETE /api/leads/{leadId}/demo — remove demo URL from LeadGen (does not delete the WP site). */
+/**
+ * DELETE /api/leads/{leadId}/demo — permanently deletes the demo everywhere:
+ * the demoGen Lead record AND its live WordPress site (demoGen's own DELETE
+ * handler cascades to wpDeleteSite), then clears LeadGen's local proposal
+ * fields. Irreversible — there is no undo once this call succeeds.
+ */
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ leadId: string }> },
@@ -243,6 +248,7 @@ export async function DELETE(
         proposalId: proposals.id,
         demoStatus: proposals.demoStatus,
         demoUrl: proposals.demoUrl,
+        demoGenLeadId: proposals.demoGenLeadId,
       })
       .from(leads)
       .innerJoin(searches, eq(leads.searchId, searches.id))
@@ -270,6 +276,31 @@ export async function DELETE(
       return NextResponse.json({ error: "This lead has no demo to delete." }, { status: 400 });
     }
 
+    let wpDeleteWarning: string | null = null;
+    if (row.demoGenLeadId) {
+      const webhookConfig = await getAgentDemoWebhookConfig(user.id);
+      if (webhookConfig.url && webhookConfig.apiKey) {
+        try {
+          const demoGenOrigin = new URL(webhookConfig.url).origin;
+          const res = await fetch(`${demoGenOrigin}/api/leads/${row.demoGenLeadId}`, {
+            method: "DELETE",
+            headers: { "x-leadgen-api-key": webhookConfig.apiKey },
+          });
+          if (!res.ok) {
+            const data = (await res.json().catch(() => null)) as { message?: string } | null;
+            throw new Error(data?.message || `Demo builder delete failed (${res.status})`);
+          }
+          const data = (await res.json().catch(() => null)) as { wpDeleteWarning?: string | null } | null;
+          wpDeleteWarning = data?.wpDeleteWarning ?? null;
+        } catch (error) {
+          // Do not proceed to unlink locally if the upstream delete failed —
+          // that would leave the live WP site orphaned with no record of it.
+          const message = error instanceof Error ? error.message : "Failed to delete demo on the demo builder";
+          return NextResponse.json({ error: message }, { status: 502 });
+        }
+      }
+    }
+
     await db
       .update(proposals)
       .set({
@@ -277,11 +308,12 @@ export async function DELETE(
         demoStatus: DEMO_STATUS_NONE,
         demoRequestedAt: null,
         wpDemoPageId: null,
+        demoGenLeadId: null,
         updatedAt: new Date(),
       })
       .where(eq(proposals.id, row.proposalId));
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, wpDeleteWarning });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

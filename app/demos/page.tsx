@@ -201,15 +201,16 @@ export default function DemosPage() {
               id="delete-demo-title"
               className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
             >
-              Delete demo?
+              Permanently delete this demo?
             </h2>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Remove the demo for{" "}
+              This deletes the demo for{" "}
               <span className="font-medium text-zinc-900 dark:text-zinc-200">
                 {demoToDelete.title}
               </span>{" "}
-              from LeadGen. The lead and proposal stay; you can create a new demo later. The
-              WordPress site on demoGen is not deleted.
+              everywhere: the demo record and its <strong>live WordPress site</strong> are both
+              removed. This cannot be undone. The lead and proposal in LeadGen stay, and you can
+              create a new demo later.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
