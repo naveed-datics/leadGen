@@ -41,41 +41,83 @@ export function PagesTab({ leadId, lead }: Props) {
   const [editText, setEditText] = useState<Record<number, string>>(() =>
     Object.fromEntries(pageMap.map((p) => [p.source_page_id, editsToText(p.content_document_edits)])),
   );
-  const [generating, setGenerating] = useState<number | null>(null);
+  const [generating, setGenerating] = useState<number | "all" | null>(null);
   const [applying, setApplying] = useState<number | null>(null);
   const [applyingAll, setApplyingAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  async function generateText(pageIds?: number[]) {
+    const res = await fetch(`/api/leads/${leadId}/demo-proxy/generate-text`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        templateSiteId: lead.templateSiteId,
+        businessName: lead.businessName,
+        industry: lead.industry ?? undefined,
+        phone: lead.phone ?? undefined,
+        email: lead.email ?? undefined,
+        address: lead.address ?? undefined,
+        pageMap,
+        pageIds,
+      }),
+    });
+    const data = (await res.json()) as { pageMap?: PageFieldMap[]; error?: string; message?: string };
+    if (!res.ok || !data.pageMap) throw new Error(data.error ?? data.message ?? "Generation failed");
+    return data.pageMap;
+  }
+
+  /** Persists generated content to the lead record so it survives a page
+   * refresh even before the operator applies it to the live site — apply-page
+   * does this too on success, but generation alone doesn't touch the DB. */
+  async function persistPageMap(newPageMap: PageFieldMap[]) {
+    await fetch(`/api/leads/${leadId}/demo-proxy`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pageMap: newPageMap }),
+    }).catch(() => {
+      // Best-effort — the generated content still lives in local state and
+      // can be applied this session even if the background save fails.
+    });
+  }
+
+  /** Bootstraps the page list for demos that never had a pageMap generated
+   * (e.g. provisioned before AI content was run) — generates content for
+   * every page on the template site, not just ones already listed here. */
+  async function generateAllPages() {
+    setGenerating("all");
+    setError(null);
+    setMessage(null);
+    try {
+      const newPageMap = await generateText(undefined);
+      setPageMap(newPageMap);
+      setEditText(
+        Object.fromEntries(newPageMap.map((p) => [p.source_page_id, editsToText(p.content_document_edits)])),
+      );
+      await persistPageMap(newPageMap);
+      setMessage(`Generated content for ${newPageMap.length} page(s).`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed");
+    } finally {
+      setGenerating(null);
+    }
+  }
 
   async function generatePage(page: PageFieldMap) {
     setGenerating(page.source_page_id);
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`/api/leads/${leadId}/demo-proxy/generate-text`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateSiteId: lead.templateSiteId,
-          businessName: lead.businessName,
-          industry: lead.industry ?? undefined,
-          phone: lead.phone ?? undefined,
-          email: lead.email ?? undefined,
-          address: lead.address ?? undefined,
-          pageMap,
-          pageIds: [page.source_page_id],
-        }),
-      });
-      const data = (await res.json()) as { pageMap?: PageFieldMap[]; error?: string; message?: string };
-      if (!res.ok || !data.pageMap) throw new Error(data.error ?? data.message ?? "Generation failed");
-      setPageMap(data.pageMap);
-      const updated = data.pageMap.find((p) => p.source_page_id === page.source_page_id);
+      const newPageMap = await generateText([page.source_page_id]);
+      setPageMap(newPageMap);
+      const updated = newPageMap.find((p) => p.source_page_id === page.source_page_id);
       if (updated) {
         setEditText((prev) => ({
           ...prev,
           [page.source_page_id]: editsToText(updated.content_document_edits),
         }));
       }
+      await persistPageMap(newPageMap);
       setMessage(`Generated content for "${page.slug ?? page.source_page_id}".`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed");
@@ -127,9 +169,30 @@ export function PagesTab({ leadId, lead }: Props) {
 
   if (pageMap.length === 0) {
     return (
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        No pages found for this demo yet.
-      </p>
+      <div className="space-y-4">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          This demo doesn&apos;t have page content generated yet. Generate content for every
+          page on the site to start editing text and images.
+        </p>
+        {error && (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => void generateAllPages()}
+          disabled={generating === "all" || !lead.templateSiteId}
+          className="rounded-md bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
+        >
+          {generating === "all" ? "Generating…" : "Generate all page content"}
+        </button>
+        {!lead.templateSiteId && (
+          <p className="text-xs text-zinc-500 dark:text-zinc-500">
+            This demo has no template site on record, so content can&apos;t be generated.
+          </p>
+        )}
+      </div>
     );
   }
 
