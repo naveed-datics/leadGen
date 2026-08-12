@@ -73,15 +73,20 @@ async function forward(
     }
     const apiKey = webhookConfig.apiKey;
 
-    // Logo upload is a user-scoped demoGen route (POST /api/me/uploads/logo),
-    // not lead-scoped — special-case it rather than nesting it under
-    // /api/leads/{demoGenLeadId}/..., which doesn't exist on demoGen's side.
+    // Logo upload (POST /api/me/uploads/logo) and generate-text
+    // (POST /api/leads/generate-text) are NOT lead-scoped sub-routes on
+    // demoGen's side — special-case both rather than nesting them under
+    // /api/leads/{demoGenLeadId}/..., which doesn't resolve on demoGen.
     const isLogoUpload = path.length === 2 && path[0] === "uploads" && path[1] === "logo";
+    const isGenerateText = path.length === 1 && path[0] === "generate-text";
+    const origin = demoGenOrigin(webhookConfig.url);
     const targetUrl = isLogoUpload
-      ? `${demoGenOrigin(webhookConfig.url)}/api/me/uploads/logo`
-      : `${demoGenOrigin(webhookConfig.url)}/api/leads/${proposalRow.demoGenLeadId}${
-          path.length ? `/${path.join("/")}` : ""
-        }`;
+      ? `${origin}/api/me/uploads/logo`
+      : isGenerateText
+        ? `${origin}/api/leads/generate-text`
+        : `${origin}/api/leads/${proposalRow.demoGenLeadId}${
+            path.length ? `/${path.join("/")}` : ""
+          }`;
 
     const contentType = request.headers.get("content-type") ?? "";
     const forwardHeaders: Record<string, string> = { "x-leadgen-api-key": apiKey };
