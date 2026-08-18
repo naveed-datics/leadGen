@@ -64,7 +64,7 @@ export async function wahaFetch(
         ...getWahaHeaders(config),
         ...(init?.headers ?? {}),
       },
-      signal: init?.signal ?? AbortSignal.timeout(15_000),
+      signal: init?.signal ?? AbortSignal.timeout(120_000),
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : "network error";
