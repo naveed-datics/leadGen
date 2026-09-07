@@ -24,6 +24,14 @@ type ListResponse =
   | { items: BusinessRow[]; total: number; limit: number; offset: number }
   | { error: string };
 
+type EditForm = {
+  title: string;
+  phone: string;
+  email: string;
+  website: string;
+  address: string;
+};
+
 const inputClass =
   "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
 
@@ -47,6 +55,18 @@ export default function BusinessesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  const [editing, setEditing] = useState<BusinessRow | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>({
+    title: "",
+    phone: "",
+    email: "",
+    website: "",
+    address: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BusinessRow | null>(null);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -112,6 +132,111 @@ export default function BusinessesPage() {
       phone: "",
       email: "",
     });
+  }
+
+  function openEdit(row: BusinessRow) {
+    setEditing(row);
+    setEditForm({
+      title: row.title,
+      phone: row.phone ?? "",
+      email: row.email ?? "",
+      website: row.website ?? "",
+      address: row.address ?? "",
+    });
+    setError(null);
+  }
+
+  function closeEdit() {
+    if (saving) return;
+    setEditing(null);
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    if (!editForm.title.trim()) {
+      setError("Title is required");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/businesses/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editForm.title.trim(),
+          phone: editForm.phone.trim() || null,
+          email: editForm.email.trim() || null,
+          website: editForm.website.trim() || null,
+          address: editForm.address.trim() || null,
+        }),
+      });
+      const data = (await res.json()) as {
+        business?: {
+          id: string;
+          title: string;
+          phone: string | null;
+          email: string | null;
+          website: string | null;
+          hasWebsite: boolean;
+          address: string | null;
+        };
+        error?: string;
+      };
+      if (!res.ok || !data.business) {
+        setError(data.error ?? "Failed to update business");
+        return;
+      }
+
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === editing.id
+            ? {
+                ...item,
+                title: data.business!.title,
+                phone: data.business!.phone,
+                email: data.business!.email,
+                website: data.business!.website,
+                hasWebsite: data.business!.hasWebsite,
+                address: data.business!.address,
+              }
+            : item,
+        ),
+      );
+      setEditing(null);
+    } catch {
+      setError("Network error while saving");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeletingId(deleteTarget.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/businesses/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+      } | null;
+      if (!res.ok) {
+        setError(data?.error ?? "Failed to delete business");
+        return;
+      }
+      setItems((prev) => prev.filter((item) => item.id !== deleteTarget.id));
+      setTotal((prev) => Math.max(0, prev - 1));
+      setDeleteTarget(null);
+    } catch {
+      setError("Network error while deleting");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   async function exportCsv() {
@@ -276,18 +401,19 @@ export default function BusinessesPage() {
               <th className="px-4 py-3 font-medium">Email</th>
               <th className="px-4 py-3 font-medium">Website</th>
               <th className="px-4 py-3 font-medium">Search</th>
+              <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-zinc-500">
+                <td colSpan={8} className="px-4 py-8 text-zinc-500">
                   Loading…
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-zinc-500">
+                <td colSpan={8} className="px-4 py-8 text-zinc-500">
                   No businesses match these filters.
                 </td>
               </tr>
@@ -350,12 +476,175 @@ export default function BusinessesPage() {
                       Open
                     </Link>
                   </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(row)}
+                        className="rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(row)}
+                        disabled={deletingId === row.id}
+                        className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60 dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/40"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {editing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-business-title"
+        >
+          <form
+            onSubmit={(e) => void saveEdit(e)}
+            className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+          >
+            <h2
+              id="edit-business-title"
+              className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
+            >
+              Edit business
+            </h2>
+            <div className="mt-4 grid gap-3">
+              <label className="block">
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  Title
+                </span>
+                <input
+                  required
+                  value={editForm.title}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, title: e.target.value }))
+                  }
+                  className={`mt-1.5 ${inputClass}`}
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  Phone
+                </span>
+                <input
+                  value={editForm.phone}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, phone: e.target.value }))
+                  }
+                  className={`mt-1.5 ${inputClass}`}
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  Email
+                </span>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                  className={`mt-1.5 ${inputClass}`}
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  Website
+                </span>
+                <input
+                  value={editForm.website}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, website: e.target.value }))
+                  }
+                  className={`mt-1.5 ${inputClass}`}
+                  placeholder="https://"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  Address
+                </span>
+                <input
+                  value={editForm.address}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, address: e.target.value }))
+                  }
+                  className={`mt-1.5 ${inputClass}`}
+                />
+              </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeEdit}
+                disabled={saving}
+                className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-60 dark:border-zinc-600 dark:text-zinc-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-business-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+            <h2
+              id="delete-business-title"
+              className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
+            >
+              Delete business?
+            </h2>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              This removes <span className="font-medium">{deleteTarget.title}</span>{" "}
+              from the directory. Linked outreach leads for this business are also
+              removed.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deletingId === deleteTarget.id}
+                className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-60 dark:border-zinc-600 dark:text-zinc-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                disabled={deletingId === deleteTarget.id}
+                className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {deletingId === deleteTarget.id ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
