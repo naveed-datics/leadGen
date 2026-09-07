@@ -9,6 +9,8 @@ import { isWahaConfigured } from "@/lib/integrations/waha";
 
 const PutSchema = z.object({
   serpApiKey: z.string().min(1).optional(),
+  googlePlacesApiKey: z.string().min(1).optional(),
+  searchDataSource: z.enum(["serpapi", "google_places"]).optional(),
 });
 
 export async function PUT(request: Request) {
@@ -21,10 +23,11 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    const hasAny = Object.values(parsed.data).some(
-      (v) => typeof v === "string" && v.trim().length > 0,
-    );
-    if (!hasAny) {
+    const hasKey =
+      Boolean(parsed.data.serpApiKey?.trim()) ||
+      Boolean(parsed.data.googlePlacesApiKey?.trim());
+    const hasSource = typeof parsed.data.searchDataSource === "string";
+    if (!hasKey && !hasSource) {
       return NextResponse.json(
         { error: "No settings provided" },
         { status: 400 },
@@ -40,6 +43,12 @@ export async function PUT(request: Request) {
     if (parsed.data.serpApiKey?.trim()) {
       patch.serpApiKeyEnc = encryptSecret(parsed.data.serpApiKey);
     }
+    if (parsed.data.googlePlacesApiKey?.trim()) {
+      patch.googlePlacesApiKeyEnc = encryptSecret(parsed.data.googlePlacesApiKey);
+    }
+    if (parsed.data.searchDataSource) {
+      patch.searchDataSource = parsed.data.searchDataSource;
+    }
 
     const [updated] = await db
       .update(users)
@@ -47,6 +56,8 @@ export async function PUT(request: Request) {
       .where(eq(users.id, agent.id))
       .returning({
         serpApiKeyEnc: users.serpApiKeyEnc,
+        googlePlacesApiKeyEnc: users.googlePlacesApiKeyEnc,
+        searchDataSource: users.searchDataSource,
         whatsAppEnabled: users.whatsAppEnabled,
       });
 
@@ -54,6 +65,13 @@ export async function PUT(request: Request) {
       ok: true,
       integrations: {
         serpApiKeyConfigured: Boolean(updated.serpApiKeyEnc?.trim()),
+        googlePlacesApiKeyConfigured: Boolean(
+          updated.googlePlacesApiKeyEnc?.trim(),
+        ),
+        searchDataSource:
+          updated.searchDataSource === "google_places"
+            ? "google_places"
+            : "serpapi",
         waConfigured: isWahaConfigured(),
         whatsAppEnabled: updated.whatsAppEnabled,
       },
@@ -66,4 +84,3 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

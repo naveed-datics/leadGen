@@ -61,9 +61,29 @@ export interface SearchResult {
   totalFetched: number;
   totalWithoutWebsite: number;
   pagesFetched: number;
+  /** Total provider HTTP page calls for this run. */
+  apiHits: number;
+  /** Provider used: `serpapi` | `google_places`. */
+  dataSource?: SearchDataSource;
   businesses: BusinessLead[];
   allBusinesses: SearchBusiness[];
   searchId?: string;
+}
+
+export type SearchDataSource = "serpapi" | "google_places";
+
+export interface LocalBusinessSearchParams {
+  industry: string;
+  location: string;
+  apiKey: string;
+  targetCount: number;
+}
+
+export interface LocalBusinessSearchPageResult {
+  allBusinesses: SearchBusiness[];
+  pagesFetched: number;
+  apiHits: number;
+  query: string;
 }
 
 export interface SearchSummary {
@@ -121,6 +141,8 @@ export interface SearchDetail {
   location: string;
   totalFetched: number;
   totalWithoutWebsite: number;
+  apiHits?: number;
+  dataSource?: SearchDataSource | null;
   demoTemplate?: string | null;
   createdAt: string;
 }

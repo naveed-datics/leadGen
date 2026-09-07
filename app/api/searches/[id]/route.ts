@@ -82,6 +82,8 @@ export async function GET(
         location: search.location,
         totalFetched: search.totalFetched,
         totalWithoutWebsite: search.totalWithoutWebsite,
+        apiHits: search.apiHits ?? 0,
+        dataSource: search.dataSource ?? null,
         demoTemplate: search.demoTemplate,
         createdAt: search.createdAt.toISOString(),
       },

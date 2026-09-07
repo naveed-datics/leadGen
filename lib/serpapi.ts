@@ -1,5 +1,6 @@
 import type {
-  BusinessLead,
+  LocalBusinessSearchPageResult,
+  LocalBusinessSearchParams,
   SearchBusiness,
   SearchResult,
   SerpApiLocalResult,
@@ -7,8 +8,9 @@ import type {
 } from "./types";
 
 const SERPAPI_BASE = "https://serpapi.com/search.json";
-const PAGE_OFFSETS = [0, 20, 40, 60, 80, 100] as const;
 const RESULTS_PER_PAGE = 20;
+/** Enough offsets to chase ~300 results; Maps engine often stops earlier. */
+const MAX_PAGE_START = 400;
 
 export class SerpApiError extends Error {
   status: number;
@@ -61,10 +63,6 @@ function toSearchBusiness(result: SerpApiLocalResult): SearchBusiness {
   };
 }
 
-function toBusinessLead(result: SerpApiLocalResult): BusinessLead {
-  return baseFields(result);
-}
-
 async function fetchMapsPage(
   query: string,
   start: number,
@@ -113,46 +111,82 @@ async function fetchMapsPage(
   return data;
 }
 
-export async function searchBusinessesWithoutWebsite(
-  industry: string,
-  location: string,
-  apiKey: string,
-): Promise<SearchResult> {
+/**
+ * Search Google Maps via SerpAPI until unique results reach `targetCount`
+ * or the provider returns no more pages. Each HTTP page = 1 apiHit.
+ */
+export async function searchLocalBusinesses(
+  params: LocalBusinessSearchParams,
+): Promise<LocalBusinessSearchPageResult> {
+  const { industry, location, apiKey, targetCount } = params;
   const query = buildSearchQuery(industry, location);
   const seenPlaceIds = new Set<string>();
   const allResults: SerpApiLocalResult[] = [];
   let pagesFetched = 0;
+  let apiHits = 0;
 
-  for (const start of PAGE_OFFSETS) {
+  for (let start = 0; start <= MAX_PAGE_START; start += RESULTS_PER_PAGE) {
+    if (allResults.length >= targetCount) break;
+
     const data = await fetchMapsPage(query, start, apiKey);
-    const pageResults = data.local_results ?? [];
+    apiHits += 1;
     pagesFetched += 1;
 
-    if (pageResults.length === 0) {
-      break;
-    }
+    const pageResults = data.local_results ?? [];
+    if (pageResults.length === 0) break;
 
     for (const result of pageResults) {
+      if (allResults.length >= targetCount) break;
       const key = result.place_id ?? `${result.title}-${result.address ?? start}`;
       if (seenPlaceIds.has(key)) continue;
       seenPlaceIds.add(key);
       allResults.push(result);
     }
 
-    if (pageResults.length < RESULTS_PER_PAGE) {
-      break;
-    }
+    if (pageResults.length < RESULTS_PER_PAGE) break;
   }
-
-  const allBusinesses = allResults.map(toSearchBusiness);
-  const withoutWebsite = allResults.filter(hasNoWebsite);
 
   return {
     query,
-    totalFetched: allResults.length,
-    totalWithoutWebsite: withoutWebsite.length,
     pagesFetched,
-    allBusinesses,
-    businesses: withoutWebsite.map(toBusinessLead),
+    apiHits,
+    allBusinesses: allResults.map(toSearchBusiness),
+  };
+}
+
+/** @deprecated Prefer searchLocalBusinesses — kept for call-site compatibility during migration. */
+export async function searchBusinessesWithoutWebsite(
+  industry: string,
+  location: string,
+  apiKey: string,
+  targetCount = 120,
+): Promise<SearchResult> {
+  const page = await searchLocalBusinesses({
+    industry,
+    location,
+    apiKey,
+    targetCount,
+  });
+  const withoutWebsite = page.allBusinesses.filter((b) => !b.hasWebsite);
+  return {
+    query: page.query,
+    totalFetched: page.allBusinesses.length,
+    totalWithoutWebsite: withoutWebsite.length,
+    pagesFetched: page.pagesFetched,
+    apiHits: page.apiHits,
+    allBusinesses: page.allBusinesses,
+    businesses: withoutWebsite.map((b) => ({
+      title: b.title,
+      placeId: b.placeId,
+      address: b.address,
+      phone: b.phone,
+      rating: b.rating,
+      reviews: b.reviews,
+      type: b.type,
+      mapsUrl: b.mapsUrl,
+      thumbnail: b.thumbnail,
+      latitude: b.latitude,
+      longitude: b.longitude,
+    })),
   };
 }

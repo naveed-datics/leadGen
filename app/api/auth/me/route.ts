@@ -15,6 +15,8 @@ export async function GET() {
         searchEnabled: user.searchEnabled,
         whatsAppEnabled: user.whatsAppEnabled,
         serpApiKeyConfigured: user.serpApiKeyConfigured,
+        googlePlacesApiKeyConfigured: user.googlePlacesApiKeyConfigured,
+        searchDataSource: user.searchDataSource,
         waConfigured: user.waConfigured,
       },
     });

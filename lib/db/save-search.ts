@@ -1,4 +1,4 @@
-import type { SearchResult } from "@/lib/types";
+import type { SearchDataSource, SearchResult } from "@/lib/types";
 import { eq } from "drizzle-orm";
 import { getDb } from "./index";
 import { leads, searchBusinesses, searches } from "./schema";
@@ -9,6 +9,10 @@ export async function saveSearch(
   location: string,
   result: SearchResult,
   searchKey: string,
+  options?: {
+    dataSource?: SearchDataSource;
+    apiHits?: number;
+  },
 ): Promise<string> {
   const db = getDb();
   const [search] = await db
@@ -22,6 +26,8 @@ export async function saveSearch(
       totalFetched: result.totalFetched,
       totalWithoutWebsite: result.totalWithoutWebsite,
       pagesFetched: result.pagesFetched,
+      dataSource: options?.dataSource ?? result.dataSource ?? null,
+      apiHits: options?.apiHits ?? result.apiHits ?? 0,
       demoEnabled: true,
     })
     .returning({ id: searches.id });
@@ -40,6 +46,7 @@ export async function saveSearch(
           placeId: business.placeId,
           address: business.address,
           phone: business.phone,
+          email: null,
           website: business.website,
           hasWebsite: business.hasWebsite,
           latitude: business.latitude,

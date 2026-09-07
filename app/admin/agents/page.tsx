@@ -11,6 +11,8 @@ type AgentRow = {
   searchEnabled: boolean;
   whatsAppEnabled: boolean;
   serpApiKeyConfigured: boolean;
+  googlePlacesApiKeyConfigured: boolean;
+  searchDataSource: "serpapi" | "google_places";
   waConfigured: boolean;
   createdAt: string;
   updatedAt: string;
@@ -406,7 +408,16 @@ export default function AdminAgentsPage() {
                     </button>
                   </td>
                   <td className="px-4 py-3 text-xs">
+                    <div>
+                      Source:{" "}
+                      {a.searchDataSource === "google_places"
+                        ? "Google Places"
+                        : "SerpApi"}
+                    </div>
                     <div>SerpApi: {a.serpApiKeyConfigured ? "OK" : "Missing"}</div>
+                    <div>
+                      Places: {a.googlePlacesApiKeyConfigured ? "OK" : "Missing"}
+                    </div>
                     <div>WAHA: {a.waConfigured ? "OK" : "Missing"}</div>
                   </td>
                 </tr>

@@ -9,6 +9,7 @@ import {
   type IndustryOption,
 } from "@/components/SearchForm";
 import { SearchProgress } from "@/components/SearchProgress";
+import type { LocationChoice } from "@/lib/geo/cities";
 import type { SearchSummary } from "@/lib/types";
 
 type MeResponse =
@@ -24,12 +25,16 @@ type AgentSettingsResponse =
       agent: {
         region: string | null;
         serpApiKeyConfigured: boolean;
+        googlePlacesApiKeyConfigured: boolean;
+        searchDataSource: "serpapi" | "google_places";
         searchEnabled: boolean;
       };
     }
   | { error: string };
 
-type CitiesResponse = { cities: string[] } | { error: string };
+type CitiesResponse =
+  | { cities: string[]; locations?: LocationChoice[] }
+  | { error: string };
 
 type IndustriesResponse =
   | { industries: IndustryOption[] }
@@ -48,8 +53,10 @@ export default function SearchesPage() {
   const [meRole, setMeRole] = useState<"admin" | "agent" | null>(null);
   const [country, setCountry] = useState<string>("");
   const [cities, setCities] = useState<string[]>([]);
+  const [locationChoices, setLocationChoices] = useState<LocationChoice[]>([]);
   const [industries, setIndustries] = useState<IndustryOption[]>([]);
-  const [serpApiReady, setSerpApiReady] = useState<boolean>(true);
+  const [searchProviderReady, setSearchProviderReady] = useState<boolean>(true);
+  const [searchProviderLabel, setSearchProviderLabel] = useState("SerpApi");
   const [agentSearchEnabled, setAgentSearchEnabled] = useState<boolean>(true);
 
   const [industryId, setIndustryId] = useState("");
@@ -113,7 +120,18 @@ export default function SearchesPage() {
       if (!assignedCountry) return;
       if (!cancelled) setCountry(assignedCountry);
       if (!cancelled) {
-        setSerpApiReady(Boolean(data.agent.serpApiKeyConfigured));
+        const source =
+          data.agent.searchDataSource === "google_places"
+            ? "google_places"
+            : "serpapi";
+        const ready =
+          source === "google_places"
+            ? Boolean(data.agent.googlePlacesApiKeyConfigured)
+            : Boolean(data.agent.serpApiKeyConfigured);
+        setSearchProviderReady(ready);
+        setSearchProviderLabel(
+          source === "google_places" ? "Google Places" : "SerpApi",
+        );
         setAgentSearchEnabled(Boolean(data.agent.searchEnabled));
       }
 
@@ -127,8 +145,13 @@ export default function SearchesPage() {
         "cities" in citiesData && Array.isArray(citiesData.cities)
           ? citiesData.cities
           : [];
+      const locations =
+        "locations" in citiesData && Array.isArray(citiesData.locations)
+          ? citiesData.locations
+          : [];
       if (!cancelled) {
         setCities(list);
+        setLocationChoices(locations);
         setCity((prev) => (!prev && list.length > 0 ? list[0] : prev));
       }
     }
@@ -208,7 +231,7 @@ export default function SearchesPage() {
       setFormError("Lead search is available to agents only.");
       return;
     }
-    if (!serpApiReady || !agentSearchEnabled) {
+    if (!searchProviderReady || !agentSearchEnabled) {
       return;
     }
     if (!industryId) {
@@ -350,7 +373,7 @@ export default function SearchesPage() {
                   Add new search
                 </h2>
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  Select an industry and city to search Google Maps for businesses without a website.
+                  Select an industry and a state or city to search Google Maps for businesses without a website.
                 </p>
               </div>
               <button
@@ -374,12 +397,12 @@ export default function SearchesPage() {
                 </div>
               )}
 
-              {meRole === "agent" && agentSearchEnabled && !serpApiReady && (
+              {meRole === "agent" && agentSearchEnabled && !searchProviderReady && (
                 <div
                   role="status"
                   className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100"
                 >
-                  Add your SerpApi key in Settings to enable search.
+                  Add your {searchProviderLabel} key in Settings to enable search.
                 </div>
               )}
 
@@ -390,9 +413,10 @@ export default function SearchesPage() {
                 location={city}
                 locationLabel={`Region: ${country || "—"}`}
                 locationOptions={cities}
-                locationPlaceholder="Search city"
+                locationChoices={locationChoices}
+                locationPlaceholder="Type a state or city"
                 locationLockedToOptions
-                disabled={!serpApiReady || !agentSearchEnabled}
+                disabled={!searchProviderReady || !agentSearchEnabled}
                 loading={submitting}
                 onIndustryChange={(id) => {
                   clearDuplicateState();

@@ -1,0 +1,218 @@
+import { and, count, desc, eq, ilike, SQL } from "drizzle-orm";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { AuthError, requireAuth } from "@/lib/auth/guards";
+import { getDb } from "@/lib/db/index";
+import { searchBusinesses, searches } from "@/lib/db/schema";
+
+const QuerySchema = z.object({
+  industry: z.string().optional(),
+  hasWebsite: z.enum(["true", "false"]).optional(),
+  website: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  q: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+  format: z.enum(["json", "csv"]).optional(),
+});
+
+export type BusinessListItem = {
+  id: string;
+  title: string;
+  industry: string;
+  location: string;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  hasWebsite: boolean;
+  address: string | null;
+  rating: number | null;
+  reviews: number | null;
+  mapsUrl: string | null;
+  searchId: string;
+  createdAt: string;
+};
+
+function csvEscape(value: string | number | boolean | null | undefined): string {
+  if (value == null) return "";
+  const str = String(value);
+  if (/[",\n\r]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function toCsv(rows: BusinessListItem[]): string {
+  const header = [
+    "Title",
+    "Industry",
+    "Location",
+    "Phone",
+    "Email",
+    "Website",
+    "Has Website",
+    "Address",
+    "Rating",
+    "Reviews",
+    "Maps URL",
+    "Search ID",
+    "Created At",
+  ];
+  const lines = [header.join(",")];
+  for (const row of rows) {
+    lines.push(
+      [
+        csvEscape(row.title),
+        csvEscape(row.industry),
+        csvEscape(row.location),
+        csvEscape(row.phone),
+        csvEscape(row.email),
+        csvEscape(row.website),
+        csvEscape(row.hasWebsite ? "Yes" : "No"),
+        csvEscape(row.address),
+        csvEscape(row.rating),
+        csvEscape(row.reviews),
+        csvEscape(row.mapsUrl),
+        csvEscape(row.searchId),
+        csvEscape(row.createdAt),
+      ].join(","),
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+export async function GET(request: Request) {
+  try {
+    const user = await requireAuth();
+    const url = new URL(request.url);
+    const parsed = QuerySchema.safeParse({
+      industry: url.searchParams.get("industry") ?? undefined,
+      hasWebsite: url.searchParams.get("hasWebsite") ?? undefined,
+      website: url.searchParams.get("website") ?? undefined,
+      phone: url.searchParams.get("phone") ?? undefined,
+      email: url.searchParams.get("email") ?? undefined,
+      q: url.searchParams.get("q") ?? undefined,
+      limit: url.searchParams.get("limit") ?? undefined,
+      offset: url.searchParams.get("offset") ?? undefined,
+      format: url.searchParams.get("format") ?? undefined,
+    });
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid query" }, { status: 400 });
+    }
+
+    const {
+      industry,
+      hasWebsite,
+      website,
+      phone,
+      email,
+      q,
+      format = "json",
+    } = parsed.data;
+    const isCsv = format === "csv";
+    const limit = isCsv ? Math.min(parsed.data.limit ?? 10_000, 10_000) : (parsed.data.limit ?? 100);
+    const offset = isCsv ? 0 : (parsed.data.offset ?? 0);
+
+    const filters: SQL[] = [];
+    if (user.role === "agent") {
+      filters.push(eq(searches.agentId, user.id));
+    }
+    if (industry?.trim()) {
+      filters.push(ilike(searches.industry, `%${industry.trim()}%`));
+    }
+    if (hasWebsite === "true") {
+      filters.push(eq(searchBusinesses.hasWebsite, true));
+    } else if (hasWebsite === "false") {
+      filters.push(eq(searchBusinesses.hasWebsite, false));
+    }
+    if (website?.trim()) {
+      filters.push(ilike(searchBusinesses.website, `%${website.trim()}%`));
+    }
+    if (phone?.trim()) {
+      filters.push(ilike(searchBusinesses.phone, `%${phone.trim()}%`));
+    }
+    if (email?.trim()) {
+      filters.push(ilike(searchBusinesses.email, `%${email.trim()}%`));
+    }
+    if (q?.trim()) {
+      filters.push(ilike(searchBusinesses.title, `%${q.trim()}%`));
+    }
+
+    const whereClause = filters.length > 0 ? and(...filters) : undefined;
+    const db = getDb();
+
+    const [totalRow] = await db
+      .select({ total: count() })
+      .from(searchBusinesses)
+      .innerJoin(searches, eq(searchBusinesses.searchId, searches.id))
+      .where(whereClause);
+
+    const rows = await db
+      .select({
+        id: searchBusinesses.id,
+        title: searchBusinesses.title,
+        industry: searches.industry,
+        location: searches.location,
+        phone: searchBusinesses.phone,
+        email: searchBusinesses.email,
+        website: searchBusinesses.website,
+        hasWebsite: searchBusinesses.hasWebsite,
+        address: searchBusinesses.address,
+        rating: searchBusinesses.rating,
+        reviews: searchBusinesses.reviews,
+        mapsUrl: searchBusinesses.mapsUrl,
+        searchId: searchBusinesses.searchId,
+        createdAt: searchBusinesses.createdAt,
+      })
+      .from(searchBusinesses)
+      .innerJoin(searches, eq(searchBusinesses.searchId, searches.id))
+      .where(whereClause)
+      .orderBy(desc(searchBusinesses.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const items: BusinessListItem[] = rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      industry: row.industry,
+      location: row.location,
+      phone: row.phone,
+      email: row.email,
+      website: row.website,
+      hasWebsite: row.hasWebsite,
+      address: row.address,
+      rating: row.rating,
+      reviews: row.reviews,
+      mapsUrl: row.mapsUrl,
+      searchId: row.searchId,
+      createdAt: row.createdAt.toISOString(),
+    }));
+
+    if (isCsv) {
+      const csv = toCsv(items);
+      return new NextResponse(csv, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="businesses-${new Date().toISOString().slice(0, 10)}.csv"`,
+        },
+      });
+    }
+
+    return NextResponse.json({
+      items,
+      total: totalRow?.total ?? 0,
+      limit,
+      offset,
+    });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    const message =
+      error instanceof Error ? error.message : "Failed to load businesses";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

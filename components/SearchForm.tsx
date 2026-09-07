@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { LocationSelect } from "@/components/LocationSelect";
+import type { LocationChoice } from "@/lib/geo/cities";
 
 export type IndustryOption = {
   id: string;
@@ -14,6 +16,7 @@ interface SearchFormProps {
   industriesManageHref?: string;
   location: string;
   locationOptions?: string[];
+  locationChoices?: LocationChoice[];
   locationLabel?: string;
   locationPlaceholder?: string;
   locationLockedToOptions?: boolean;
@@ -31,6 +34,7 @@ export function SearchForm({
   industriesManageHref = "/agent/industries",
   location,
   locationOptions,
+  locationChoices,
   locationLabel,
   locationPlaceholder,
   locationLockedToOptions,
@@ -41,7 +45,8 @@ export function SearchForm({
   onSubmit,
 }: SearchFormProps) {
   const lockLocation = Boolean(locationLockedToOptions);
-  const hasLocationOptions = Boolean(locationOptions && locationOptions.length > 0);
+  const hasLocationChoices = Boolean(locationChoices && locationChoices.length > 0);
+  const hasLocationOptions = hasLocationChoices || Boolean(locationOptions && locationOptions.length > 0);
   const lockIndustry = Boolean(industryLockedToOptions);
   const hasIndustryOptions = Boolean(industryOptions && industryOptions.length > 0);
   const formDisabled = Boolean(disabled) || loading;
@@ -113,7 +118,16 @@ export function SearchForm({
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             {locationLabel ?? "Location"}
           </span>
-          {hasLocationOptions ? (
+          {hasLocationChoices ? (
+            <LocationSelect
+              value={location}
+              choices={locationChoices ?? []}
+              disabled={locationDisabled}
+              required
+              placeholder={locationPlaceholder ?? "Type a state or city"}
+              onChange={onLocationChange}
+            />
+          ) : hasLocationOptions ? (
             <select
               value={location}
               onChange={(e) => onLocationChange(e.target.value)}

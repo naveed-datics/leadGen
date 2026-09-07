@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listCitiesForCountry } from "@/lib/geo/cities";
+import { listCitiesForCountry, listLocationChoices } from "@/lib/geo/cities";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -8,6 +8,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "country is required" }, { status: 400 });
   }
 
-  return NextResponse.json({ country, cities: listCitiesForCountry(country) });
+  return NextResponse.json({
+    country,
+    cities: listCitiesForCountry(country),
+    locations: listLocationChoices(country),
+  });
 }
 

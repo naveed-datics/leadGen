@@ -1,4 +1,12 @@
-export const COUNTRY_CITIES: Record<string, string[]> = {
+import { US_STATE_CITIES } from "@/lib/geo/us-locations";
+
+export type LocationChoice = {
+  value: string;
+  label: string;
+  group: string;
+};
+
+const COUNTRY_CITY_LISTS: Record<string, string[]> = {
   Pakistan: [
     "Karachi",
     "Lahore",
@@ -21,18 +29,6 @@ export const COUNTRY_CITIES: Record<string, string[]> = {
     "Umm Al Quwain",
     "Al Ain",
   ],
-  "United States": [
-    "New York, NY",
-    "Los Angeles, CA",
-    "Chicago, IL",
-    "Houston, TX",
-    "Phoenix, AZ",
-    "Austin, TX",
-    "Dallas, TX",
-    "San Francisco, CA",
-    "Seattle, WA",
-    "Miami, FL",
-  ],
   "United Kingdom": [
     "London",
     "Manchester",
@@ -44,25 +40,60 @@ export const COUNTRY_CITIES: Record<string, string[]> = {
   ],
 };
 
+function usLocationChoices(): LocationChoice[] {
+  const choices: LocationChoice[] = [];
+  for (const { state, abbrev, cities } of US_STATE_CITIES) {
+    choices.push({
+      value: state,
+      label: `All of ${state}`,
+      group: `${state} (${abbrev})`,
+    });
+    for (const city of cities) {
+      const value = abbrev === "DC" ? "Washington, DC" : `${city}, ${abbrev}`;
+      choices.push({
+        value,
+        label: value,
+        group: `${state} (${abbrev})`,
+      });
+    }
+  }
+  return choices;
+}
+
+const US_CHOICES = usLocationChoices();
+
+function flatChoices(country: string, cities: string[]): LocationChoice[] {
+  return cities.map((city) => ({
+    value: city,
+    label: city,
+    group: country,
+  }));
+}
+
 export function listCountries(): string[] {
-  return Object.keys(COUNTRY_CITIES).sort();
+  return ["Pakistan", "UAE", "United Kingdom", "United States"].sort();
 }
 
 export function normalizeCountryKey(country: string): string | null {
   const trimmed = country.trim();
   if (!trimmed) return null;
 
-  if (COUNTRY_CITIES[trimmed]) return trimmed;
+  const known = ["Pakistan", "UAE", "United Kingdom", "United States"];
+  if (known.includes(trimmed)) return trimmed;
 
   const normalized = trimmed.toLowerCase();
-  const key = Object.keys(COUNTRY_CITIES).find(
-    (k) => k.trim().toLowerCase() === normalized,
-  );
-  return key ?? null;
+  return known.find((k) => k.trim().toLowerCase() === normalized) ?? null;
 }
 
-export function listCitiesForCountry(country: string): string[] {
+export function listLocationChoices(country: string): LocationChoice[] {
   const key = normalizeCountryKey(country);
-  return key ? COUNTRY_CITIES[key] : [];
+  if (!key) return [];
+  if (key === "United States") return US_CHOICES;
+  const cities = COUNTRY_CITY_LISTS[key] ?? [];
+  return flatChoices(key, cities);
 }
 
+/** All selectable location values (state-wide or city) for a country. */
+export function listCitiesForCountry(country: string): string[] {
+  return listLocationChoices(country).map((choice) => choice.value);
+}

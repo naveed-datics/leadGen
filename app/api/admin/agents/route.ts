@@ -138,6 +138,8 @@ export async function GET(request: Request) {
         searchEnabled: users.searchEnabled,
         whatsAppEnabled: users.whatsAppEnabled,
         serpApiKeyEnc: users.serpApiKeyEnc,
+        googlePlacesApiKeyEnc: users.googlePlacesApiKeyEnc,
+        searchDataSource: users.searchDataSource,
         waAccessTokenEnc: users.waAccessTokenEnc,
         waPhoneNumberId: users.waPhoneNumberId,
         createdAt: users.createdAt,
@@ -156,6 +158,9 @@ export async function GET(request: Request) {
         searchEnabled: r.searchEnabled,
         whatsAppEnabled: r.whatsAppEnabled,
         serpApiKeyConfigured: Boolean(r.serpApiKeyEnc?.trim()),
+        googlePlacesApiKeyConfigured: Boolean(r.googlePlacesApiKeyEnc?.trim()),
+        searchDataSource:
+          r.searchDataSource === "google_places" ? "google_places" : "serpapi",
         waConfigured: isWahaConfigured(),
         createdAt: r.createdAt.toISOString(),
         updatedAt: r.updatedAt.toISOString(),

@@ -31,6 +31,8 @@ export async function GET() {
         searchEnabled: agent.searchEnabled,
         whatsAppEnabled: agent.whatsAppEnabled,
         serpApiKeyConfigured: agent.serpApiKeyConfigured,
+        googlePlacesApiKeyConfigured: agent.googlePlacesApiKeyConfigured,
+        searchDataSource: agent.searchDataSource,
         waConfigured: isWahaConfigured(),
         proposalTemplateConfigured: Boolean(row?.proposalTemplate?.trim()),
         demoEnabled: wpSettings?.demoEnabled ?? false,

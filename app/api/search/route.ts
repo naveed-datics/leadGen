@@ -5,16 +5,24 @@ import { AuthError, requireActiveAgent } from "@/lib/auth/guards";
 import { isUniqueViolation } from "@/lib/db/industry-helpers";
 import { saveSearch } from "@/lib/db/save-search";
 import { getDb } from "@/lib/db/index";
-import { industries, searchActivityLogs, searches } from "@/lib/db/schema";
+import { industries, searchActivityLogs, searches, users } from "@/lib/db/schema";
 import { listCitiesForCountry } from "@/lib/geo/cities";
 import { buildSearchKey } from "@/lib/industries";
+import { resolveGooglePlacesApiKeyForAgent } from "@/lib/integrations/google-places";
 import { resolveSerpApiKeyForAgent } from "@/lib/integrations/serpapi";
-import { SerpApiError, searchBusinessesWithoutWebsite } from "@/lib/serpapi";
+import { GooglePlacesError } from "@/lib/google-places";
+import { runBusinessSearch } from "@/lib/search/run-search";
+import { SerpApiError } from "@/lib/serpapi";
+import type { SearchDataSource } from "@/lib/types";
 
 const SearchBodySchema = z.object({
   industryId: z.string().uuid(),
   city: z.string().min(1),
 });
+
+function normalizeDataSource(value: string | null | undefined): SearchDataSource {
+  return value === "google_places" ? "google_places" : "serpapi";
+}
 
 export async function POST(request: Request) {
   if (!process.env.DATABASE_URL) {
@@ -111,31 +119,47 @@ export async function POST(request: Request) {
     );
   }
 
+  const [agentRow] = await db
+    .select({ searchDataSource: users.searchDataSource })
+    .from(users)
+    .where(eq(users.id, agent.id))
+    .limit(1);
+
+  const dataSource = normalizeDataSource(agentRow?.searchDataSource);
+
   let apiKey: string;
   try {
-    apiKey = await resolveSerpApiKeyForAgent(agent.id);
+    apiKey =
+      dataSource === "google_places"
+        ? await resolveGooglePlacesApiKeyForAgent(agent.id)
+        : await resolveSerpApiKeyForAgent(agent.id);
   } catch (error) {
     const message =
       error instanceof Error
         ? error.message
-        : "SerpApi key is not configured. Add it in Settings.";
+        : dataSource === "google_places"
+          ? "Google Places API key is not configured. Add it in Settings."
+          : "SerpApi key is not configured. Add it in Settings.";
     return NextResponse.json({ error: message }, { status: 403 });
   }
 
   try {
-    const result = await searchBusinessesWithoutWebsite(
-      industry.name,
-      `${city}, ${country}`,
+    const result = await runBusinessSearch({
+      source: dataSource,
+      industry: industry.name,
+      locationSelection: city,
+      country,
       apiKey,
-    );
+    });
 
     try {
       const searchId = await saveSearch(
         agent.id,
         industry.name,
-        `${city}, ${country}`,
+        city,
         result,
         searchKey,
+        { dataSource, apiHits: result.apiHits },
       );
 
       await db.insert(searchActivityLogs).values({
@@ -144,7 +168,12 @@ export async function POST(request: Request) {
         region: `${city}, ${country}`,
       });
 
-      return NextResponse.json({ ...result, searchId });
+      return NextResponse.json({
+        ...result,
+        searchId,
+        dataSource,
+        apiHits: result.apiHits,
+      });
     } catch (error) {
       if (isUniqueViolation(error)) {
         const [raceExisting] = await db
@@ -166,6 +195,12 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     if (error instanceof SerpApiError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status === 429 ? 429 : 502 },
+      );
+    }
+    if (error instanceof GooglePlacesError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.status === 429 ? 429 : 502 },

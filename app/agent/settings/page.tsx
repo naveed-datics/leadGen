@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { WhatsAppConnectionCard } from "@/components/WhatsAppConnectionCard";
 import { DemoWebhookCard } from "@/components/DemoWebhookCard";
+import type { SearchDataSource } from "@/lib/types";
 
 type AgentSettings = {
   id: string;
@@ -13,6 +14,8 @@ type AgentSettings = {
   searchEnabled: boolean;
   whatsAppEnabled: boolean;
   serpApiKeyConfigured: boolean;
+  googlePlacesApiKeyConfigured: boolean;
+  searchDataSource: SearchDataSource;
   waConfigured: boolean;
 };
 
@@ -23,6 +26,9 @@ export default function AgentSettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [serpApiKey, setSerpApiKey] = useState("");
+  const [googlePlacesApiKey, setGooglePlacesApiKey] = useState("");
+  const [searchDataSource, setSearchDataSource] =
+    useState<SearchDataSource>("serpapi");
 
   async function load() {
     setLoading(true);
@@ -32,6 +38,9 @@ export default function AgentSettingsPage() {
       const data = (await res.json()) as { agent?: AgentSettings; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed to load settings");
       setAgent(data.agent ?? null);
+      if (data.agent?.searchDataSource) {
+        setSearchDataSource(data.agent.searchDataSource);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
     } finally {
@@ -53,12 +62,17 @@ export default function AgentSettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           serpApiKey: serpApiKey.trim() ? serpApiKey : undefined,
+          googlePlacesApiKey: googlePlacesApiKey.trim()
+            ? googlePlacesApiKey
+            : undefined,
+          searchDataSource,
         }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed to save settings");
       setSuccess("Saved.");
       setSerpApiKey("");
+      setGooglePlacesApiKey("");
       await load();
     } catch (e2) {
       setError(e2 instanceof Error ? e2.message : "Failed to save settings");
@@ -98,7 +112,17 @@ export default function AgentSettingsPage() {
             </div>
           </div>
           <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-zinc-100 pt-4 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+            <span>
+              Data source:{" "}
+              {agent.searchDataSource === "google_places"
+                ? "Google Places"
+                : "SerpApi"}
+            </span>
             <span>SerpApi key: {agent.serpApiKeyConfigured ? "Configured" : "Missing"}</span>
+            <span>
+              Google Places key:{" "}
+              {agent.googlePlacesApiKeyConfigured ? "Configured" : "Missing"}
+            </span>
             <span>WhatsApp server: {agent.waConfigured ? "Ready" : "Not configured"}</span>
           </div>
         </div>
@@ -132,6 +156,29 @@ export default function AgentSettingsPage() {
 
       <form onSubmit={save} className="mt-6 space-y-6">
         <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-base font-semibold">Search data source</h2>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            Default is SerpApi. Switch to Google Places when you have added your own
+            Places API key below.
+          </p>
+          <label className="mt-3 block">
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              Active provider
+            </span>
+            <select
+              value={searchDataSource}
+              onChange={(e) =>
+                setSearchDataSource(e.target.value as SearchDataSource)
+              }
+              className="mt-2 w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-3 text-sm text-zinc-950 shadow-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+            >
+              <option value="serpapi">SerpApi (default)</option>
+              <option value="google_places">Google Places</option>
+            </select>
+          </label>
+        </section>
+
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-base font-semibold">SerpApi</h2>
           <label className="mt-3 block">
             <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
@@ -141,7 +188,31 @@ export default function AgentSettingsPage() {
               value={serpApiKey}
               onChange={(e) => setSerpApiKey(e.target.value)}
               className="mt-2 w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-3 text-sm text-zinc-950 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
-              placeholder={agent?.serpApiKeyConfigured ? "•••••••• (set a new key)" : "paste key"}
+              placeholder={
+                agent?.serpApiKeyConfigured ? "•••••••• (set a new key)" : "paste key"
+              }
+            />
+          </label>
+        </section>
+
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-base font-semibold">Google Places</h2>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            Each agent uses their own Google Places API key.
+          </p>
+          <label className="mt-3 block">
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              API key
+            </span>
+            <input
+              value={googlePlacesApiKey}
+              onChange={(e) => setGooglePlacesApiKey(e.target.value)}
+              className="mt-2 w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-3 text-sm text-zinc-950 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+              placeholder={
+                agent?.googlePlacesApiKeyConfigured
+                  ? "•••••••• (set a new key)"
+                  : "paste key"
+              }
             />
           </label>
         </section>
@@ -156,4 +227,3 @@ export default function AgentSettingsPage() {
     </main>
   );
 }
-

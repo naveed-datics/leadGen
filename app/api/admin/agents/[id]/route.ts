@@ -39,6 +39,8 @@ export async function GET(
         searchEnabled: users.searchEnabled,
         whatsAppEnabled: users.whatsAppEnabled,
         serpApiKeyEnc: users.serpApiKeyEnc,
+        googlePlacesApiKeyEnc: users.googlePlacesApiKeyEnc,
+        searchDataSource: users.searchDataSource,
         waAccessTokenEnc: users.waAccessTokenEnc,
         waPhoneNumberId: users.waPhoneNumberId,
         createdAt: users.createdAt,
@@ -61,6 +63,9 @@ export async function GET(
         searchEnabled: row.searchEnabled,
         whatsAppEnabled: row.whatsAppEnabled,
         serpApiKeyConfigured: Boolean(row.serpApiKeyEnc?.trim()),
+        googlePlacesApiKeyConfigured: Boolean(row.googlePlacesApiKeyEnc?.trim()),
+        searchDataSource:
+          row.searchDataSource === "google_places" ? "google_places" : "serpapi",
         waConfigured: isWahaConfigured(),
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),

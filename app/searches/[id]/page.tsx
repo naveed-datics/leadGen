@@ -390,6 +390,14 @@ export default function SearchDetailPage() {
             dateStyle: "medium",
             timeStyle: "short",
           })}
+          {" · "}
+          {search.totalFetched} businesses · {search.totalWithoutWebsite} without website
+          {typeof search.apiHits === "number"
+            ? ` · ${search.apiHits} API hit${search.apiHits === 1 ? "" : "s"}`
+            : ""}
+          {search.dataSource
+            ? ` · ${search.dataSource === "google_places" ? "Google Places" : "SerpApi"}`
+            : ""}
         </p>
         {!hasDemoTemplate && (
           <p className="text-sm text-amber-700 dark:text-amber-300">

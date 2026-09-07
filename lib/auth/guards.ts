@@ -6,6 +6,8 @@ import { isWahaConfigured } from "@/lib/integrations/waha";
 import type { AuthRole } from "./jwt";
 import { authCookieName, verifyAuthToken } from "./jwt";
 
+export type SearchDataSource = "serpapi" | "google_places";
+
 export type CurrentUser = {
   id: string;
   role: AuthRole;
@@ -16,6 +18,8 @@ export type CurrentUser = {
   searchEnabled: boolean;
   whatsAppEnabled: boolean;
   serpApiKeyConfigured: boolean;
+  googlePlacesApiKeyConfigured: boolean;
+  searchDataSource: SearchDataSource;
   waConfigured: boolean;
 };
 
@@ -51,6 +55,8 @@ export async function requireAuth(): Promise<CurrentUser> {
       searchEnabled: users.searchEnabled,
       whatsAppEnabled: users.whatsAppEnabled,
       serpApiKeyEnc: users.serpApiKeyEnc,
+      googlePlacesApiKeyEnc: users.googlePlacesApiKeyEnc,
+      searchDataSource: users.searchDataSource,
     })
     .from(users)
     .where(eq(users.id, payload.sub));
@@ -59,6 +65,9 @@ export async function requireAuth(): Promise<CurrentUser> {
 
   const role = user.role === "admin" ? "admin" : user.role === "agent" ? "agent" : null;
   if (!role) throw new AuthError("Invalid user role", 401);
+
+  const searchDataSource: SearchDataSource =
+    user.searchDataSource === "google_places" ? "google_places" : "serpapi";
 
   return {
     id: user.id,
@@ -70,6 +79,8 @@ export async function requireAuth(): Promise<CurrentUser> {
     searchEnabled: user.searchEnabled,
     whatsAppEnabled: user.whatsAppEnabled,
     serpApiKeyConfigured: Boolean(user.serpApiKeyEnc?.trim()),
+    googlePlacesApiKeyConfigured: Boolean(user.googlePlacesApiKeyEnc?.trim()),
+    searchDataSource,
     waConfigured: isWahaConfigured(),
   };
 }

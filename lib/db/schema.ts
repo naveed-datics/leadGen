@@ -22,6 +22,9 @@ export const users = pgTable("users", {
   active: boolean("active").notNull().default(true),
   searchEnabled: boolean("search_enabled").notNull().default(true),
   serpApiKeyEnc: text("serpapi_key_enc"),
+  googlePlacesApiKeyEnc: text("google_places_api_key_enc"),
+  /** `serpapi` | `google_places` — which provider runs searches for this agent. */
+  searchDataSource: text("search_data_source").notNull().default("serpapi"),
   waAccessTokenEnc: text("wa_access_token_enc"),
   waPhoneNumberId: text("wa_phone_number_id"),
   waBusinessAccountId: text("wa_business_account_id"),
@@ -81,6 +84,10 @@ export const searches = pgTable(
     totalFetched: integer("total_fetched").notNull(),
     totalWithoutWebsite: integer("total_without_website").notNull(),
     pagesFetched: integer("pages_fetched").notNull(),
+    /** Provider that ran this search: `serpapi` | `google_places`. */
+    dataSource: text("data_source"),
+    /** Total provider HTTP page calls for this search run. */
+    apiHits: integer("api_hits").notNull().default(0),
     proposalTemplate: text("proposal_template"),
     demoEnabled: boolean("demo_enabled").notNull().default(false),
     defaultDemoPageId: integer("default_demo_page_id"),
@@ -103,6 +110,7 @@ export const searchBusinesses = pgTable("search_businesses", {
   placeId: text("place_id"),
   address: text("address"),
   phone: text("phone"),
+  email: text("email"),
   website: text("website"),
   hasWebsite: boolean("has_website").notNull(),
   latitude: real("latitude"),
