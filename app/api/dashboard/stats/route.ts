@@ -21,12 +21,13 @@ export async function GET() {
 
     const [row] = await db
       .select({
-        totalLeads: sql<number>`count(${leads.id})`,
-        proposalsInProgress: sql<number>`sum(case when ${proposals.status} in ('in_progress', 'draft') then 1 else 0 end)`,
-        proposalsSent: sql<number>`sum(case when ${proposals.status} = 'sent' then 1 else 0 end)`,
-        proposalsDelivered: sql<number>`sum(case when ${proposals.deliveredAt} is not null and ${proposals.status} in ('sent', 'replied') then 1 else 0 end)`,
-        proposalsRead: sql<number>`sum(case when ${proposals.readAt} is not null and ${proposals.status} in ('sent', 'replied') then 1 else 0 end)`,
-        proposalsReplied: sql<number>`sum(case when ${proposals.status} = 'replied' then 1 else 0 end)`,
+        totalLeads: sql<number>`count(distinct ${leads.id})`,
+        whatsappLeads: sql<number>`count(distinct case when ${leads.hasWhatsapp} = true then ${leads.id} end)`,
+        proposalsInProgress: sql<number>`count(distinct case when ${proposals.status} in ('in_progress', 'draft') then ${proposals.id} end)`,
+        proposalsSent: sql<number>`count(distinct case when ${proposals.status} = 'sent' then ${proposals.id} end)`,
+        proposalsDelivered: sql<number>`count(distinct case when ${proposals.deliveredAt} is not null and ${proposals.status} in ('sent', 'replied') then ${proposals.id} end)`,
+        proposalsRead: sql<number>`count(distinct case when ${proposals.readAt} is not null and ${proposals.status} in ('sent', 'replied') then ${proposals.id} end)`,
+        proposalsReplied: sql<number>`count(distinct case when ${proposals.status} = 'replied' then ${proposals.id} end)`,
       })
       .from(leads)
       .innerJoin(searches, eq(leads.searchId, searches.id))
@@ -34,9 +35,15 @@ export async function GET() {
       .where(searchScope)
       .limit(1);
 
+    const totalLeads = Number(row?.totalLeads ?? 0);
+    const whatsappLeads = Number(row?.whatsappLeads ?? 0);
+    const textLeads = Math.max(0, totalLeads - whatsappLeads);
+
     return NextResponse.json({
       stats: {
-        totalLeads: Number(row?.totalLeads ?? 0),
+        totalLeads,
+        whatsappLeads,
+        textLeads,
         proposalsInProgress: Number(row?.proposalsInProgress ?? 0),
         proposalsSent: Number(row?.proposalsSent ?? 0),
         proposalsDelivered: Number(row?.proposalsDelivered ?? 0),

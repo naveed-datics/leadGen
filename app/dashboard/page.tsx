@@ -17,6 +17,8 @@ type DashboardStatsResponse =
   | {
       stats: {
         totalLeads: number;
+        whatsappLeads: number;
+        textLeads: number;
         proposalsInProgress: number;
         proposalsSent: number;
         proposalsDelivered: number;
@@ -175,6 +177,8 @@ export default function DashboardPage() {
   const [region, setRegion] = useState<string | null>(null);
   const [stats, setStats] = useState<{
     totalLeads: number;
+    whatsappLeads: number;
+    textLeads: number;
     proposalsInProgress: number;
     proposalsSent: number;
     proposalsDelivered: number;
@@ -255,6 +259,10 @@ export default function DashboardPage() {
               </div>
               <div className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
                 {stats.totalLeads}
+              </div>
+              <div className="mt-2 space-y-0.5 text-sm text-zinc-600 dark:text-zinc-400">
+                <div>WhatsApp {stats.whatsappLeads}</div>
+                <div>Text {stats.textLeads}</div>
               </div>
             </Link>
             <Link
