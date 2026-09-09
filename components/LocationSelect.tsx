@@ -8,6 +8,7 @@ type Props = {
   choices: LocationChoice[];
   disabled?: boolean;
   required?: boolean;
+  allowClear?: boolean;
   placeholder?: string;
   onChange: (value: string) => void;
 };
@@ -32,9 +33,11 @@ export function LocationSelect({
   choices,
   disabled,
   required,
+  allowClear,
   placeholder = "Type a state or city",
   onChange,
 }: Props) {
+  const canClear = Boolean(allowClear) && Boolean(value) && !disabled;
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -101,7 +104,15 @@ export function LocationSelect({
     } else if (event.key === "Escape") {
       setOpen(false);
       setQuery("");
+    } else if (event.key === "Backspace" && !open && value && !required) {
+      onChange("");
     }
+  }
+
+  function clear() {
+    onChange("");
+    setQuery("");
+    setOpen(false);
   }
 
   return (
@@ -117,13 +128,33 @@ export function LocationSelect({
         placeholder={placeholder}
         value={open ? query : selected?.label ?? value}
         onChange={(e) => {
-          setQuery(e.target.value);
+          const next = e.target.value;
+          setQuery(next);
           setOpen(true);
+          if (!required && next.trim() === "") {
+            onChange("");
+          }
         }}
         onFocus={() => setOpen(true)}
+        onBlur={() => {
+          if (!required && !query.trim() && !selected) {
+            onChange("");
+          }
+        }}
         onKeyDown={onKeyDown}
-        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+        className={`w-full rounded-lg border border-zinc-300 bg-white py-2.5 text-zinc-900 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 ${
+          canClear ? "pl-3 pr-16" : "px-3"
+        }`}
       />
+      {canClear && (
+        <button
+          type="button"
+          onClick={clear}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+        >
+          Clear
+        </button>
+      )}
       {open && !disabled && (
         <div
           id={listId}

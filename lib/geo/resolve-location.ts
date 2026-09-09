@@ -1,5 +1,6 @@
 import { US_STATE_CITIES } from "@/lib/geo/us-locations";
 import { normalizeCountryKey } from "@/lib/geo/cities";
+import { PER_CITY_TARGET } from "@/lib/search/constants";
 
 export type SearchLocationMode = "city" | "state";
 
@@ -30,7 +31,7 @@ export function citiesForState(state: string): string[] {
 }
 
 /**
- * City → target 300. US state (“All of X”) → each listed city at 150.
+ * City → 300. US state (“All of X”) → each listed city at 300.
  * Non-US always city mode at 300.
  */
 export function resolveSearchPlan(
@@ -46,7 +47,7 @@ export function resolveSearchPlan(
       mode: "state",
       selection,
       cities: cities.length > 0 ? cities : [selection],
-      perCityTarget: 150,
+      perCityTarget: PER_CITY_TARGET,
     };
   }
 
@@ -54,6 +55,6 @@ export function resolveSearchPlan(
     mode: "city",
     selection,
     cities: [selection],
-    perCityTarget: 300,
+    perCityTarget: PER_CITY_TARGET,
   };
 }

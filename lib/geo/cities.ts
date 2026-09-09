@@ -97,3 +97,22 @@ export function listLocationChoices(country: string): LocationChoice[] {
 export function listCitiesForCountry(country: string): string[] {
   return listLocationChoices(country).map((choice) => choice.value);
 }
+
+/**
+ * City query values only — excludes US “All of {state}” entries.
+ * Used for country-wide bulk search.
+ */
+export function listSearchableCitiesForCountry(country: string): string[] {
+  const key = normalizeCountryKey(country);
+  if (!key) return [];
+  if (key === "United States") {
+    const cities: string[] = [];
+    for (const { abbrev, cities: stateCities } of US_STATE_CITIES) {
+      for (const city of stateCities) {
+        cities.push(abbrev === "DC" ? "Washington, DC" : `${city}, ${abbrev}`);
+      }
+    }
+    return cities;
+  }
+  return [...(COUNTRY_CITY_LISTS[key] ?? [])];
+}

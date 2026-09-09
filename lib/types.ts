@@ -149,8 +149,40 @@ export interface SearchDetail {
 
 export interface SearchRequest {
   industryId: string;
-  city: string;
+  city?: string;
+  resumeAfter?: string;
 }
+
+export type BulkCityCreated = {
+  searchId: string;
+  city: string;
+  totalFetched: number;
+  totalWithoutWebsite: number;
+  apiHits: number;
+};
+
+export type BulkCitySkipped = {
+  city: string;
+  existingSearchId: string;
+};
+
+export type BulkCityFailed = {
+  city: string;
+  error: string;
+};
+
+export type BulkSearchResponse = {
+  mode: "bulk";
+  complete: boolean;
+  resumeAfter?: string;
+  country: string;
+  industry: string;
+  perCityTarget: number;
+  totalCities: number;
+  created: BulkCityCreated[];
+  skipped: BulkCitySkipped[];
+  failed: BulkCityFailed[];
+};
 
 export type WebsiteStatsSource = "measured" | "ai" | "mixed" | "apify";
 

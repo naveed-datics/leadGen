@@ -2,10 +2,23 @@
 
 interface SearchProgressProps {
   active: boolean;
+  mode?: "single" | "bulk";
+  processedCities?: number;
+  totalCities?: number;
 }
 
-export function SearchProgress({ active }: SearchProgressProps) {
+export function SearchProgress({
+  active,
+  mode = "single",
+  processedCities,
+  totalCities,
+}: SearchProgressProps) {
   if (!active) return null;
+
+  const bulkCount =
+    typeof processedCities === "number" && typeof totalCities === "number" && totalCities > 0
+      ? `${processedCities} of ${totalCities} cities`
+      : null;
 
   return (
     <div
@@ -15,9 +28,15 @@ export function SearchProgress({ active }: SearchProgressProps) {
     >
       <Spinner />
       <div>
-        <p className="font-medium">Searching Google Maps…</p>
+        <p className="font-medium">
+          {mode === "bulk" ? "Searching all cities…" : "Searching Google Maps…"}
+        </p>
         <p className="mt-0.5 text-emerald-700 dark:text-emerald-300/80">
-          Fetching up to 6 pages of results. This may take 15-30 seconds.
+          {mode === "bulk"
+            ? `Fetching 300 results per city. Already-saved cities are skipped. This can take several minutes.${
+                bulkCount ? ` ${bulkCount}.` : ""
+              }`
+            : "Fetching up to 300 results. This may take a minute."}
         </p>
       </div>
     </div>

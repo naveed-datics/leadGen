@@ -9,6 +9,10 @@ import {
 } from "@/components/SearchForm";
 import { SearchProgress } from "@/components/SearchProgress";
 import type { LocationChoice } from "@/lib/geo/cities";
+import {
+  submitAgentSearch,
+  type AggregatedBulkSearch,
+} from "@/lib/search/submit-search";
 
 type MeResponse =
   | {
@@ -54,6 +58,10 @@ export default function Home() {
   const [searchProviderReady, setSearchProviderReady] = useState<boolean>(true);
   const [searchProviderLabel, setSearchProviderLabel] = useState("SerpApi");
   const [agentSearchEnabled, setAgentSearchEnabled] = useState<boolean>(true);
+  const [bulkActive, setBulkActive] = useState(false);
+  const [bulkProcessed, setBulkProcessed] = useState(0);
+  const [bulkTotal, setBulkTotal] = useState(0);
+  const [bulkSummary, setBulkSummary] = useState<AggregatedBulkSearch | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,7 +129,6 @@ export default function Home() {
       if (!cancelled) {
         setCities(list);
         setLocationChoices(locations);
-        setCity((prev) => (!prev && list.length > 0 ? list[0] : prev));
       }
     }
     void loadAgentSettings();
@@ -160,6 +167,7 @@ export default function Home() {
   function clearDuplicateState() {
     setDuplicateSearchId(null);
     setError(null);
+    setBulkSummary(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -175,46 +183,51 @@ export default function Home() {
       setError("Select an industry before searching.");
       return;
     }
+    const isBulk = !city.trim();
     setLoading(true);
     setError(null);
     setDuplicateSearchId(null);
+    setBulkSummary(null);
+    setBulkActive(isBulk);
+    setBulkProcessed(0);
+    setBulkTotal(0);
 
     try {
-      const response = await fetch("/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ industryId, city }),
+      const result = await submitAgentSearch({
+        industryId,
+        city,
+        onBulkChunk: (totals) => {
+          setBulkTotal(totals.totalCities);
+          setBulkProcessed(
+            totals.created.length + totals.skipped.length + totals.failed.length,
+          );
+        },
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        const existingId =
-          typeof data?.existingSearchId === "string"
-            ? data.existingSearchId.trim()
-            : "";
-        if (response.status === 409 && existingId) {
-          setDuplicateSearchId(existingId);
+      if (!result.ok) {
+        if (result.status === 409 && result.existingSearchId) {
+          setDuplicateSearchId(result.existingSearchId);
         }
-        setError(data.error ?? "Search failed");
+        setError(result.error);
         setLoading(false);
+        setBulkActive(false);
         return;
       }
 
-      const searchId =
-        typeof data?.searchId === "string" ? data.searchId.trim() : "";
-      if (!searchId) {
-        setError("Search completed, but the saved search ID was not returned.");
+      if (result.kind === "bulk") {
+        setBulkSummary(result.result);
         setLoading(false);
+        setBulkActive(false);
         return;
       }
 
       // Keep loading=true through navigation so the form stays disabled and
       // cannot be double-submitted while the route transition is in flight.
-      router.push(`/searches/${encodeURIComponent(searchId)}`);
+      router.push(`/searches/${encodeURIComponent(result.searchId)}`);
     } catch {
       setError("Network error. Check your connection and try again.");
       setLoading(false);
+      setBulkActive(false);
     }
   }
 
@@ -228,8 +241,8 @@ export default function Home() {
           Find local businesses without a website
         </h1>
         <p className="max-w-2xl text-zinc-600 dark:text-zinc-400">
-          Select an industry and a state or city to search local businesses (SerpApi or
-          Google Places from Settings) and list leads that have no website listed.
+          Select country and industry. Leave state or city empty to search every city
+          (300 results each), or pick a location to run a single search.
         </p>
       </header>
 
@@ -275,14 +288,15 @@ export default function Home() {
       {meRole === "agent" && (
         <>
           <SearchForm
+            country={country}
             industryId={industryId}
             industryOptions={industries}
             industryLockedToOptions
             location={city}
-            locationLabel={`Region: ${country || "—"}`}
+            locationLabel="State or city"
             locationOptions={cities}
             locationChoices={locationChoices}
-            locationPlaceholder="Type a state or city"
+            locationPlaceholder="Optional — leave empty to search all cities"
             locationLockedToOptions
             disabled={!searchProviderReady || !agentSearchEnabled}
             loading={loading}
@@ -297,8 +311,31 @@ export default function Home() {
             onSubmit={handleSubmit}
           />
 
-          <SearchProgress active={loading} />
+          <SearchProgress
+            active={loading}
+            mode={bulkActive ? "bulk" : "single"}
+            processedCities={bulkProcessed}
+            totalCities={bulkTotal}
+          />
         </>
+      )}
+
+      {bulkSummary && (
+        <div
+          role="status"
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100"
+        >
+          Country-wide search finished for {bulkSummary.industry} in{" "}
+          {bulkSummary.country}: {bulkSummary.created.length} new searches,{" "}
+          {bulkSummary.skipped.length} already saved
+          {bulkSummary.failed.length > 0
+            ? `, ${bulkSummary.failed.length} failed`
+            : ""}
+          .{" "}
+          <Link href="/searches" className="font-medium underline hover:no-underline">
+            Open saved searches
+          </Link>
+        </div>
       )}
 
       {error && (

@@ -6,22 +6,41 @@ import { isUniqueViolation } from "@/lib/db/industry-helpers";
 import { saveSearch } from "@/lib/db/save-search";
 import { getDb } from "@/lib/db/index";
 import { industries, searchActivityLogs, searches, users } from "@/lib/db/schema";
-import { listCitiesForCountry } from "@/lib/geo/cities";
+import { listCitiesForCountry, listSearchableCitiesForCountry } from "@/lib/geo/cities";
 import { buildSearchKey } from "@/lib/industries";
 import { resolveGooglePlacesApiKeyForAgent } from "@/lib/integrations/google-places";
 import { resolveSerpApiKeyForAgent } from "@/lib/integrations/serpapi";
 import { GooglePlacesError } from "@/lib/google-places";
-import { runBusinessSearch } from "@/lib/search/run-search";
+import { runBulkCountrySearch, runBusinessSearch } from "@/lib/search/run-search";
 import { SerpApiError } from "@/lib/serpapi";
 import type { SearchDataSource } from "@/lib/types";
 
+export const maxDuration = 300;
+
 const SearchBodySchema = z.object({
   industryId: z.string().uuid(),
-  city: z.string().min(1),
+  city: z.string().optional(),
+  resumeAfter: z.string().optional(),
 });
 
 function normalizeDataSource(value: string | null | undefined): SearchDataSource {
   return value === "google_places" ? "google_places" : "serpapi";
+}
+
+function providerErrorResponse(error: unknown): NextResponse | null {
+  if (error instanceof SerpApiError) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: error.status === 429 ? 429 : 502 },
+    );
+  }
+  if (error instanceof GooglePlacesError) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: error.status === 429 ? 429 : 502 },
+    );
+  }
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -41,10 +60,7 @@ export async function POST(request: Request) {
 
   const parsed = SearchBodySchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Industry and city are required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Industry is required" }, { status: 400 });
   }
 
   let agent;
@@ -65,20 +81,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const city = parsed.data.city.trim();
+  const city = parsed.data.city?.trim() ?? "";
+  const resumeAfter = parsed.data.resumeAfter?.trim() || undefined;
   const country = agent.region ?? "";
-
-  if (!city) {
-    return NextResponse.json({ error: "City is required" }, { status: 400 });
-  }
-
-  const allowedCities = listCitiesForCountry(country);
-  if (allowedCities.length > 0 && !allowedCities.includes(city)) {
-    return NextResponse.json(
-      { error: `City must be within assigned country (${country})` },
-      { status: 403 },
-    );
-  }
 
   const db = getDb();
   const [industry] = await db
@@ -99,23 +104,6 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Select an industry from your Industries list." },
       { status: 400 },
-    );
-  }
-
-  const searchKey = buildSearchKey(industry.name, city);
-  const [existing] = await db
-    .select({ id: searches.id })
-    .from(searches)
-    .where(and(eq(searches.agentId, agent.id), eq(searches.searchKey, searchKey)))
-    .limit(1);
-
-  if (existing) {
-    return NextResponse.json(
-      {
-        error: `You already searched “${industry.name}” in ${city}. Open the existing saved search instead.`,
-        existingSearchId: existing.id,
-      },
-      { status: 409 },
     );
   }
 
@@ -141,6 +129,59 @@ export async function POST(request: Request) {
           ? "Google Places API key is not configured. Add it in Settings."
           : "SerpApi key is not configured. Add it in Settings.";
     return NextResponse.json({ error: message }, { status: 403 });
+  }
+
+  if (!city) {
+    const searchable = listSearchableCitiesForCountry(country);
+    if (searchable.length === 0) {
+      return NextResponse.json(
+        { error: `No cities configured for this region (${country || "none"})` },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const result = await runBulkCountrySearch({
+        agentId: agent.id,
+        source: dataSource,
+        industry: industry.name,
+        country,
+        apiKey,
+        resumeAfter,
+      });
+      return NextResponse.json(result);
+    } catch (error) {
+      const providerResponse = providerErrorResponse(error);
+      if (providerResponse) return providerResponse;
+      const message =
+        error instanceof Error ? error.message : "Search failed unexpectedly";
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
+  }
+
+  const allowedCities = listCitiesForCountry(country);
+  if (allowedCities.length > 0 && !allowedCities.includes(city)) {
+    return NextResponse.json(
+      { error: `City must be within assigned country (${country})` },
+      { status: 403 },
+    );
+  }
+
+  const searchKey = buildSearchKey(industry.name, city);
+  const [existing] = await db
+    .select({ id: searches.id })
+    .from(searches)
+    .where(and(eq(searches.agentId, agent.id), eq(searches.searchKey, searchKey)))
+    .limit(1);
+
+  if (existing) {
+    return NextResponse.json(
+      {
+        error: `You already searched “${industry.name}” in ${city}. Open the existing saved search instead.`,
+        existingSearchId: existing.id,
+      },
+      { status: 409 },
+    );
   }
 
   try {
@@ -194,18 +235,8 @@ export async function POST(request: Request) {
       throw error;
     }
   } catch (error) {
-    if (error instanceof SerpApiError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.status === 429 ? 429 : 502 },
-      );
-    }
-    if (error instanceof GooglePlacesError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.status === 429 ? 429 : 502 },
-      );
-    }
+    const providerResponse = providerErrorResponse(error);
+    if (providerResponse) return providerResponse;
     const message =
       error instanceof Error ? error.message : "Search failed unexpectedly";
     return NextResponse.json({ error: message }, { status: 502 });

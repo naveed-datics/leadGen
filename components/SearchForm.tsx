@@ -10,6 +10,7 @@ export type IndustryOption = {
 };
 
 interface SearchFormProps {
+  country?: string;
   industryId: string;
   industryOptions?: IndustryOption[];
   industryLockedToOptions?: boolean;
@@ -27,7 +28,11 @@ interface SearchFormProps {
   onSubmit: (e: React.FormEvent) => void;
 }
 
+const selectClassName =
+  "rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
+
 export function SearchForm({
+  country,
   industryId,
   industryOptions,
   industryLockedToOptions,
@@ -44,9 +49,11 @@ export function SearchForm({
   onLocationChange,
   onSubmit,
 }: SearchFormProps) {
+  const assignedCountry = (country ?? "").trim();
   const lockLocation = Boolean(locationLockedToOptions);
   const hasLocationChoices = Boolean(locationChoices && locationChoices.length > 0);
-  const hasLocationOptions = hasLocationChoices || Boolean(locationOptions && locationOptions.length > 0);
+  const hasLocationOptions =
+    hasLocationChoices || Boolean(locationOptions && locationOptions.length > 0);
   const lockIndustry = Boolean(industryLockedToOptions);
   const hasIndustryOptions = Boolean(industryOptions && industryOptions.length > 0);
   const formDisabled = Boolean(disabled) || loading;
@@ -54,6 +61,7 @@ export function SearchForm({
   const industryDisabled = formDisabled || (lockIndustry && !hasIndustryOptions);
   const submitDisabled =
     formDisabled ||
+    !assignedCountry ||
     (lockLocation && !hasLocationOptions) ||
     (lockIndustry && !hasIndustryOptions);
 
@@ -78,6 +86,23 @@ export function SearchForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Country
+          </span>
+          <select
+            value={assignedCountry}
+            disabled
+            required
+            className={selectClassName}
+          >
+            {assignedCountry ? (
+              <option value={assignedCountry}>{assignedCountry}</option>
+            ) : (
+              <option value="">No country assigned</option>
+            )}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Industry
           </span>
           {hasIndustryOptions ? (
@@ -86,7 +111,7 @@ export function SearchForm({
               onChange={(e) => onIndustryChange(e.target.value)}
               disabled={industryDisabled}
               required
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className={selectClassName}
             >
               {(industryOptions ?? []).map((opt) => (
                 <option key={opt.id} value={opt.id}>
@@ -95,11 +120,7 @@ export function SearchForm({
               ))}
             </select>
           ) : lockIndustry ? (
-            <select
-              value=""
-              disabled={industryDisabled}
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-            >
+            <select value="" disabled={industryDisabled} className={selectClassName}>
               <option value="">No industries configured</option>
             </select>
           ) : (
@@ -110,21 +131,23 @@ export function SearchForm({
               placeholder="e.g. plumbers, coffee shops"
               disabled={formDisabled}
               required
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className={`${selectClassName} placeholder:text-zinc-400`}
             />
           )}
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className="flex flex-col gap-1.5 sm:col-span-2">
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            {locationLabel ?? "Location"}
+            {locationLabel ?? "State or city"}
           </span>
           {hasLocationChoices ? (
             <LocationSelect
               value={location}
               choices={locationChoices ?? []}
               disabled={locationDisabled}
-              required
-              placeholder={locationPlaceholder ?? "Type a state or city"}
+              allowClear
+              placeholder={
+                locationPlaceholder ?? "Optional — leave empty to search all cities"
+              }
               onChange={onLocationChange}
             />
           ) : hasLocationOptions ? (
@@ -132,9 +155,9 @@ export function SearchForm({
               value={location}
               onChange={(e) => onLocationChange(e.target.value)}
               disabled={locationDisabled}
-              required
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className={selectClassName}
             >
+              <option value="">All cities (300 each)</option>
               {(locationOptions ?? []).map((opt) => (
                 <option key={opt} value={opt}>
                   {opt}
@@ -142,11 +165,7 @@ export function SearchForm({
               ))}
             </select>
           ) : lockLocation ? (
-            <select
-              value=""
-              disabled={locationDisabled}
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-            >
+            <select value="" disabled={locationDisabled} className={selectClassName}>
               <option value="">No cities configured for this region</option>
             </select>
           ) : (
@@ -154,10 +173,9 @@ export function SearchForm({
               type="text"
               value={location}
               onChange={(e) => onLocationChange(e.target.value)}
-              placeholder={locationPlaceholder ?? "Search city"}
+              placeholder={locationPlaceholder ?? "Optional — leave empty to search all cities"}
               disabled={locationDisabled}
-              required
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className={`${selectClassName} placeholder:text-zinc-400`}
             />
           )}
         </label>

@@ -10,6 +10,10 @@ import {
 } from "@/components/SearchForm";
 import { SearchProgress } from "@/components/SearchProgress";
 import type { LocationChoice } from "@/lib/geo/cities";
+import {
+  submitAgentSearch,
+  type AggregatedBulkSearch,
+} from "@/lib/search/submit-search";
 import type { SearchSummary } from "@/lib/types";
 
 type MeResponse =
@@ -64,6 +68,10 @@ export default function SearchesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [duplicateSearchId, setDuplicateSearchId] = useState<string | null>(null);
+  const [bulkActive, setBulkActive] = useState(false);
+  const [bulkProcessed, setBulkProcessed] = useState(0);
+  const [bulkTotal, setBulkTotal] = useState(0);
+  const [bulkSummary, setBulkSummary] = useState<AggregatedBulkSearch | null>(null);
 
   const loadSearches = useCallback(async () => {
     setLoading(true);
@@ -152,7 +160,6 @@ export default function SearchesPage() {
       if (!cancelled) {
         setCities(list);
         setLocationChoices(locations);
-        setCity((prev) => (!prev && list.length > 0 ? list[0] : prev));
       }
     }
     void loadAgentSettings();
@@ -223,6 +230,7 @@ export default function SearchesPage() {
     setShowNewSearch(false);
     setFormError(null);
     setDuplicateSearchId(null);
+    setBulkActive(false);
   }
 
   async function handleNewSearchSubmit(e: React.FormEvent) {
@@ -238,48 +246,54 @@ export default function SearchesPage() {
       setFormError("Select an industry before searching.");
       return;
     }
+    const isBulk = !city.trim();
     setSubmitting(true);
     setFormError(null);
     setDuplicateSearchId(null);
+    setBulkSummary(null);
+    setBulkActive(isBulk);
+    setBulkProcessed(0);
+    setBulkTotal(0);
 
     try {
-      const response = await fetch("/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ industryId, city }),
+      const result = await submitAgentSearch({
+        industryId,
+        city,
+        onBulkChunk: (totals) => {
+          setBulkTotal(totals.totalCities);
+          setBulkProcessed(
+            totals.created.length + totals.skipped.length + totals.failed.length,
+          );
+        },
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        const existingId =
-          typeof data?.existingSearchId === "string"
-            ? data.existingSearchId.trim()
-            : "";
-        if (response.status === 409 && existingId) {
-          setDuplicateSearchId(existingId);
+      if (!result.ok) {
+        if (result.status === 409 && result.existingSearchId) {
+          setDuplicateSearchId(result.existingSearchId);
         }
-        setFormError(data.error ?? "Search failed");
+        setFormError(result.error);
         setSubmitting(false);
+        setBulkActive(false);
         return;
       }
 
-      const searchId =
-        typeof data?.searchId === "string" ? data.searchId.trim() : "";
-      if (!searchId) {
-        setFormError("Search completed, but the saved search ID was not returned.");
+      if (result.kind === "bulk") {
+        setBulkSummary(result.result);
+        setShowNewSearch(false);
         setSubmitting(false);
+        setBulkActive(false);
+        await loadSearches();
         return;
       }
 
-      // Hide the popup once results are in, then open the new search.
       setShowNewSearch(false);
       setSubmitting(false);
       await loadSearches();
-      router.push(`/searches/${encodeURIComponent(searchId)}`);
+      router.push(`/searches/${encodeURIComponent(result.searchId)}`);
     } catch {
       setFormError("Network error. Check your connection and try again.");
       setSubmitting(false);
+      setBulkActive(false);
     }
   }
 
@@ -319,6 +333,21 @@ export default function SearchesPage() {
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           {error}
         </p>
+      )}
+
+      {bulkSummary && (
+        <div
+          role="status"
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100"
+        >
+          Country-wide search finished for {bulkSummary.industry} in{" "}
+          {bulkSummary.country}: {bulkSummary.created.length} new searches,{" "}
+          {bulkSummary.skipped.length} already saved
+          {bulkSummary.failed.length > 0
+            ? `, ${bulkSummary.failed.length} failed`
+            : ""}
+          .
+        </div>
       )}
 
       {!loading && !error && (
@@ -373,7 +402,8 @@ export default function SearchesPage() {
                   Add new search
                 </h2>
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  Select an industry and a state or city to search Google Maps for businesses without a website.
+                  Select a country and industry. Leave state or city empty to search
+                  every city (300 results each).
                 </p>
               </div>
               <button
@@ -407,14 +437,15 @@ export default function SearchesPage() {
               )}
 
               <SearchForm
+                country={country}
                 industryId={industryId}
                 industryOptions={industries}
                 industryLockedToOptions
                 location={city}
-                locationLabel={`Region: ${country || "—"}`}
+                locationLabel="State or city"
                 locationOptions={cities}
                 locationChoices={locationChoices}
-                locationPlaceholder="Type a state or city"
+                locationPlaceholder="Optional — leave empty to search all cities"
                 locationLockedToOptions
                 disabled={!searchProviderReady || !agentSearchEnabled}
                 loading={submitting}
@@ -429,7 +460,12 @@ export default function SearchesPage() {
                 onSubmit={handleNewSearchSubmit}
               />
 
-              <SearchProgress active={submitting} />
+              <SearchProgress
+                active={submitting}
+                mode={bulkActive ? "bulk" : "single"}
+                processedCities={bulkProcessed}
+                totalCities={bulkTotal}
+              />
 
               {formError && (
                 <div
