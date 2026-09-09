@@ -366,15 +366,24 @@ export function isDemoBuildAccepted(
   return "accepted" in result && result.accepted === true;
 }
 
+/** Canonical Maps URL demoGen can always parse back to a place_id. */
+export function placeIdToGbpUrl(placeId: string): string {
+  return `https://www.google.com/maps/place/?q=place_id:${placeId.trim()}`;
+}
+
 /** POST to demoGen and return immediately when the build is accepted async. */
 export async function requestDemoBuild({
+  placeId,
   googleBusinessProfileUrl,
   template,
   leadId,
   callbackUrl,
   webhookConfig,
 }: {
-  googleBusinessProfileUrl: string;
+  /** Preferred — demoGen resolves GBP from place_id without parsing a Maps share link. */
+  placeId?: string;
+  /** Fallback when placeId is unavailable (must embed place_id, not a cid/share URI). */
+  googleBusinessProfileUrl?: string;
   template: string;
   leadId: string;
   /** Consumer callback endpoint to receive final demo URL. */
@@ -385,6 +394,18 @@ export async function requestDemoBuild({
   if (!config) {
     throw new DemoWebhookError(
       "Demo webhook is not configured. Set the webhook URL and API key in Agent Settings.",
+      400,
+    );
+  }
+
+  const trimmedPlaceId = placeId?.trim() || "";
+  const gbpUrl =
+    trimmedPlaceId
+      ? placeIdToGbpUrl(trimmedPlaceId)
+      : googleBusinessProfileUrl?.trim() || "";
+  if (!gbpUrl) {
+    throw new DemoWebhookError(
+      "A Google place ID is required to build a demo.",
       400,
     );
   }
@@ -400,7 +421,15 @@ export async function requestDemoBuild({
         "Content-Type": "application/json",
         "X-LeadGen-API-Key": config.apiKey,
       },
-      body: JSON.stringify({ googleBusinessProfileUrl, template, leadId, callbackUrl }),
+      // Send placeId when we have it; also send the canonical place_id URL so
+      // older demoGen parsers that only read googleBusinessProfileUrl still work.
+      body: JSON.stringify({
+        ...(trimmedPlaceId ? { placeId: trimmedPlaceId } : {}),
+        googleBusinessProfileUrl: gbpUrl,
+        template,
+        leadId,
+        callbackUrl,
+      }),
     });
 
     const text = await res.text().catch(() => "");
@@ -463,13 +492,15 @@ export async function requestDemoBuild({
 }
 
 export async function createDemoSite({
+  placeId,
   googleBusinessProfileUrl,
   template,
   leadId,
   callbackUrl,
   webhookConfig,
 }: {
-  googleBusinessProfileUrl: string;
+  placeId?: string;
+  googleBusinessProfileUrl?: string;
   template: string;
   /** Consumer lead UUID — required by demoGen when a finish callback is configured. */
   leadId: string;
@@ -485,6 +516,7 @@ export async function createDemoSite({
   }
 
   const result = await requestDemoBuild({
+    placeId,
     googleBusinessProfileUrl,
     template,
     leadId,

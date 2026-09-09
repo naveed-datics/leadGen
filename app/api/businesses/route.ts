@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { searchBusinesses, searches } from "@/lib/db/schema";
+import { parseCityFromAddress } from "@/lib/geo/parse-city";
 
 const QuerySchema = z.object({
   industry: z.string().optional(),
@@ -22,6 +23,7 @@ export type BusinessListItem = {
   title: string;
   industry: string;
   location: string;
+  city: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
@@ -48,6 +50,7 @@ function toCsv(rows: BusinessListItem[]): string {
     "Title",
     "Industry",
     "Location",
+    "City",
     "Phone",
     "Email",
     "Website",
@@ -66,6 +69,7 @@ function toCsv(rows: BusinessListItem[]): string {
         csvEscape(row.title),
         csvEscape(row.industry),
         csvEscape(row.location),
+        csvEscape(row.city),
         csvEscape(row.phone),
         csvEscape(row.email),
         csvEscape(row.website),
@@ -120,7 +124,7 @@ export async function GET(request: Request) {
       filters.push(eq(searches.agentId, user.id));
     }
     if (industry?.trim()) {
-      filters.push(ilike(searches.industry, `%${industry.trim()}%`));
+      filters.push(eq(searches.industry, industry.trim()));
     }
     if (hasWebsite === "true") {
       filters.push(eq(searchBusinesses.hasWebsite, true));
@@ -178,6 +182,7 @@ export async function GET(request: Request) {
       title: row.title,
       industry: row.industry,
       location: row.location,
+      city: parseCityFromAddress(row.address),
       phone: row.phone,
       email: row.email,
       website: row.website,

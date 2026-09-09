@@ -83,9 +83,9 @@ function toSearchBusiness(
     rating: place.rating ?? null,
     reviews: place.userRatingCount ?? null,
     type,
-    mapsUrl:
-      place.googleMapsUri?.trim() ||
-      (placeId ? `https://www.google.com/maps/place/?q=place_id:${placeId}` : null),
+    mapsUrl: placeId
+      ? `https://www.google.com/maps/place/?q=place_id:${placeId}`
+      : place.googleMapsUri?.trim() || null,
     thumbnail: null,
     serpPosition: position,
   };

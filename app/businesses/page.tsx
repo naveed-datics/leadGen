@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { parseCityFromAddress } from "@/lib/geo/parse-city";
 
 type BusinessRow = {
   id: string;
   title: string;
   industry: string;
   location: string;
+  city: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
@@ -18,6 +20,11 @@ type BusinessRow = {
   mapsUrl: string | null;
   searchId: string;
   createdAt: string;
+};
+
+type IndustryOption = {
+  id: string;
+  name: string;
 };
 
 type ListResponse =
@@ -32,6 +39,15 @@ type EditForm = {
   address: string;
 };
 
+type CheckNoWebsiteResponse = {
+  complete: boolean;
+  resumeAfter?: string;
+  checked: number;
+  remainingEstimate?: number;
+  results?: Record<string, boolean>;
+  error?: string;
+};
+
 const inputClass =
   "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
 
@@ -41,6 +57,7 @@ export default function BusinessesPage() {
   const [website, setWebsite] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [industries, setIndustries] = useState<IndustryOption[]>([]);
 
   const [applied, setApplied] = useState({
     industry: "",
@@ -55,6 +72,10 @@ export default function BusinessesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  const [checkingWhatsapp, setCheckingWhatsapp] = useState(false);
+  const [whatsappCheckedTotal, setWhatsappCheckedTotal] = useState(0);
+  const [whatsappStatus, setWhatsappStatus] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<BusinessRow | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({
@@ -78,6 +99,27 @@ export default function BusinessesPage() {
     params.set("limit", "200");
     return params.toString();
   }, [applied]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadIndustries() {
+      try {
+        const res = await fetch("/api/agent/industries", { cache: "no-store" });
+        const data = (await res.json()) as {
+          industries?: IndustryOption[];
+          error?: string;
+        };
+        if (cancelled || !res.ok || !Array.isArray(data.industries)) return;
+        setIndustries(data.industries);
+      } catch {
+        // ignore — dropdown stays empty / All only
+      }
+    }
+    void loadIndustries();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -190,6 +232,7 @@ export default function BusinessesPage() {
         return;
       }
 
+      const nextAddress = data.business.address;
       setItems((prev) =>
         prev.map((item) =>
           item.id === editing.id
@@ -200,7 +243,8 @@ export default function BusinessesPage() {
                 email: data.business!.email,
                 website: data.business!.website,
                 hasWebsite: data.business!.hasWebsite,
-                address: data.business!.address,
+                address: nextAddress,
+                city: parseCityFromAddress(nextAddress),
               }
             : item,
         ),
@@ -270,6 +314,60 @@ export default function BusinessesPage() {
     }
   }
 
+  async function checkWhatsappNoWebsite() {
+    setCheckingWhatsapp(true);
+    setError(null);
+    setWhatsappCheckedTotal(0);
+    setWhatsappStatus("Starting WhatsApp check…");
+
+    let resumeAfter: string | undefined;
+    let totalChecked = 0;
+
+    try {
+      for (;;) {
+        const res = await fetch("/api/whatsapp/check-no-website", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(resumeAfter ? { resumeAfter } : {}),
+        });
+        const data = (await res.json()) as CheckNoWebsiteResponse;
+        if (!res.ok) {
+          setError(data.error ?? "WhatsApp check failed");
+          setWhatsappStatus(null);
+          return;
+        }
+
+        totalChecked += data.checked ?? 0;
+        setWhatsappCheckedTotal(totalChecked);
+
+        const remaining = data.remainingEstimate ?? 0;
+        if (data.complete) {
+          setWhatsappStatus(
+            totalChecked === 0
+              ? "No unchecked no-website leads with a phone number."
+              : `Done. Checked ${totalChecked} lead${totalChecked === 1 ? "" : "s"}.`,
+          );
+          return;
+        }
+
+        setWhatsappStatus(
+          `Checked ${totalChecked}… ${remaining} remaining`,
+        );
+        resumeAfter = data.resumeAfter;
+        if (!resumeAfter) {
+          setError("Check paused without a resume point. Try again.");
+          setWhatsappStatus(null);
+          return;
+        }
+      }
+    } catch {
+      setError("Network error while checking WhatsApp");
+      setWhatsappStatus(null);
+    } finally {
+      setCheckingWhatsapp(false);
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -281,15 +379,36 @@ export default function BusinessesPage() {
             All businesses from your saved searches. Filter above, then export CSV.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void exportCsv()}
-          disabled={exporting || loading}
-          className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-60"
-        >
-          {exporting ? "Exporting…" : "Export CSV"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void checkWhatsappNoWebsite()}
+            disabled={checkingWhatsapp || loading}
+            className="rounded-xl border border-emerald-700 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-500 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+          >
+            {checkingWhatsapp
+              ? `Checking… (${whatsappCheckedTotal})`
+              : "Check WhatsApp (no website)"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void exportCsv()}
+            disabled={exporting || loading || checkingWhatsapp}
+            className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-60"
+          >
+            {exporting ? "Exporting…" : "Export CSV"}
+          </button>
+        </div>
       </header>
+
+      {whatsappStatus && (
+        <div
+          role="status"
+          className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100"
+        >
+          {whatsappStatus}
+        </div>
+      )}
 
       <form
         onSubmit={applyFilters}
@@ -300,12 +419,18 @@ export default function BusinessesPage() {
             <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
               Industry
             </span>
-            <input
+            <select
               value={industry}
               onChange={(e) => setIndustry(e.target.value)}
               className={`mt-1.5 ${inputClass}`}
-              placeholder="e.g. Dentist"
-            />
+            >
+              <option value="">All industries</option>
+              {industries.map((opt) => (
+                <option key={opt.id} value={opt.name}>
+                  {opt.name}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block">
             <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
@@ -397,6 +522,7 @@ export default function BusinessesPage() {
               <th className="px-4 py-3 font-medium">Business</th>
               <th className="px-4 py-3 font-medium">Industry</th>
               <th className="px-4 py-3 font-medium">Location</th>
+              <th className="px-4 py-3 font-medium">City</th>
               <th className="px-4 py-3 font-medium">Phone</th>
               <th className="px-4 py-3 font-medium">Email</th>
               <th className="px-4 py-3 font-medium">Website</th>
@@ -407,13 +533,13 @@ export default function BusinessesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-zinc-500">
+                <td colSpan={9} className="px-4 py-8 text-zinc-500">
                   Loading…
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-zinc-500">
+                <td colSpan={9} className="px-4 py-8 text-zinc-500">
                   No businesses match these filters.
                 </td>
               </tr>
@@ -447,6 +573,9 @@ export default function BusinessesPage() {
                   </td>
                   <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
                     {row.location}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    {row.city ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
                     {row.phone ?? "—"}

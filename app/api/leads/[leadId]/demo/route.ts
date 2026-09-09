@@ -42,7 +42,7 @@ export async function POST(
         searchId: leads.searchId,
         title: leads.title,
         phone: leads.phone,
-        mapsUrl: leads.mapsUrl,
+        placeId: leads.placeId,
         industry: searches.industry,
         location: searches.location,
       })
@@ -64,9 +64,10 @@ export async function POST(
       );
     }
 
-    if (!leadRow.mapsUrl) {
+    const placeId = leadRow.placeId?.trim() || "";
+    if (!placeId) {
       return NextResponse.json(
-        { error: "This lead has no Google Business Profile URL to build a demo from." },
+        { error: "This lead has no Google place ID to build a demo from." },
         { status: 400 },
       );
     }
@@ -111,7 +112,7 @@ export async function POST(
     let buildResult: DemoWebhookResponse | Awaited<ReturnType<typeof requestDemoBuild>>;
     try {
       buildResult = await requestDemoBuild({
-        googleBusinessProfileUrl: leadRow.mapsUrl,
+        placeId,
         template: searchSettings.demoTemplate || leadRow.industry,
         leadId,
         callbackUrl: new URL("/api/webhooks/demo-url", request.url).toString(),
