@@ -14,6 +14,7 @@ type BusinessRow = {
   email: string | null;
   website: string | null;
   hasWebsite: boolean;
+  hasWhatsapp: boolean | null;
   address: string | null;
   rating: number | null;
   reviews: number | null;
@@ -21,6 +22,8 @@ type BusinessRow = {
   searchId: string;
   createdAt: string;
 };
+
+type WhatsappFilter = "any" | "true" | "false" | "unchecked";
 
 type IndustryOption = {
   id: string;
@@ -56,7 +59,7 @@ export default function BusinessesPage() {
   const [hasWebsite, setHasWebsite] = useState<"any" | "true" | "false">("any");
   const [website, setWebsite] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
+  const [hasWhatsapp, setHasWhatsapp] = useState<WhatsappFilter>("any");
   const [industries, setIndustries] = useState<IndustryOption[]>([]);
 
   const [applied, setApplied] = useState({
@@ -64,7 +67,7 @@ export default function BusinessesPage() {
     hasWebsite: "any" as "any" | "true" | "false",
     website: "",
     phone: "",
-    email: "",
+    hasWhatsapp: "any" as WhatsappFilter,
   });
 
   const [items, setItems] = useState<BusinessRow[]>([]);
@@ -95,7 +98,7 @@ export default function BusinessesPage() {
     if (applied.hasWebsite !== "any") params.set("hasWebsite", applied.hasWebsite);
     if (applied.website.trim()) params.set("website", applied.website.trim());
     if (applied.phone.trim()) params.set("phone", applied.phone.trim());
-    if (applied.email.trim()) params.set("email", applied.email.trim());
+    if (applied.hasWhatsapp !== "any") params.set("hasWhatsapp", applied.hasWhatsapp);
     params.set("limit", "200");
     return params.toString();
   }, [applied]);
@@ -157,7 +160,7 @@ export default function BusinessesPage() {
       hasWebsite,
       website,
       phone,
-      email,
+      hasWhatsapp,
     });
   }
 
@@ -166,14 +169,20 @@ export default function BusinessesPage() {
     setHasWebsite("any");
     setWebsite("");
     setPhone("");
-    setEmail("");
+    setHasWhatsapp("any");
     setApplied({
       industry: "",
       hasWebsite: "any",
       website: "",
       phone: "",
-      email: "",
+      hasWhatsapp: "any",
     });
+  }
+
+  function whatsappLabel(value: boolean | null): string {
+    if (value === true) return "Yes";
+    if (value === false) return "No";
+    return "—";
   }
 
   function openEdit(row: BusinessRow) {
@@ -369,7 +378,7 @@ export default function BusinessesPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+    <main className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-[-0.035em] text-zinc-900 dark:text-zinc-50">
@@ -472,14 +481,20 @@ export default function BusinessesPage() {
           </label>
           <label className="block">
             <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-              Email contains
+              WhatsApp
             </span>
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+            <select
+              value={hasWhatsapp}
+              onChange={(e) =>
+                setHasWhatsapp(e.target.value as WhatsappFilter)
+              }
               className={`mt-1.5 ${inputClass}`}
-              placeholder="@gmail.com"
-            />
+            >
+              <option value="any">Any</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+              <option value="unchecked">Unchecked</option>
+            </select>
           </label>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -515,31 +530,31 @@ export default function BusinessesPage() {
           : null}
       </p>
 
-      <div className="mt-3 overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="min-w-full text-left text-sm">
+      <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <table className="w-full table-fixed text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/60">
             <tr>
-              <th className="px-4 py-3 font-medium">Business</th>
-              <th className="px-4 py-3 font-medium">Industry</th>
-              <th className="px-4 py-3 font-medium">Location</th>
-              <th className="px-4 py-3 font-medium">City</th>
-              <th className="px-4 py-3 font-medium">Phone</th>
-              <th className="px-4 py-3 font-medium">Email</th>
-              <th className="px-4 py-3 font-medium">Website</th>
-              <th className="px-4 py-3 font-medium">Search</th>
-              <th className="px-4 py-3 font-medium">Actions</th>
+              <th className="w-[20%] px-3 py-3 font-medium">Business</th>
+              <th className="w-[11%] px-3 py-3 font-medium">Industry</th>
+              <th className="w-[11%] px-3 py-3 font-medium">Location</th>
+              <th className="w-[9%] px-3 py-3 font-medium">City</th>
+              <th className="w-[11%] px-3 py-3 font-medium">Phone</th>
+              <th className="w-[8%] px-3 py-3 font-medium">WhatsApp</th>
+              <th className="w-[14%] px-3 py-3 font-medium">Website</th>
+              <th className="w-[6%] px-3 py-3 font-medium">Search</th>
+              <th className="w-[10%] px-3 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-zinc-500">
+                <td colSpan={9} className="px-3 py-8 text-zinc-500">
                   Loading…
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-zinc-500">
+                <td colSpan={9} className="px-3 py-8 text-zinc-500">
                   No businesses match these filters.
                 </td>
               </tr>
@@ -549,47 +564,66 @@ export default function BusinessesPage() {
                   key={row.id}
                   className="border-t border-zinc-100 dark:border-zinc-800"
                 >
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-zinc-900 dark:text-zinc-50">
+                  <td className="px-3 py-3 align-top">
+                    <div className="truncate font-medium text-zinc-900 dark:text-zinc-50">
                       {row.mapsUrl ? (
                         <a
                           href={row.mapsUrl}
                           target="_blank"
                           rel="noreferrer"
                           className="underline-offset-2 hover:underline"
+                          title={row.title}
                         >
                           {row.title}
                         </a>
                       ) : (
-                        row.title
+                        <span title={row.title}>{row.title}</span>
                       )}
                     </div>
                     {row.address ? (
-                      <div className="mt-0.5 text-xs text-zinc-500">{row.address}</div>
+                      <div
+                        className="mt-0.5 truncate text-xs text-zinc-500"
+                        title={row.address}
+                      >
+                        {row.address}
+                      </div>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  <td
+                    className="truncate px-3 py-3 align-top text-zinc-700 dark:text-zinc-300"
+                    title={row.industry}
+                  >
                     {row.industry}
                   </td>
-                  <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  <td
+                    className="truncate px-3 py-3 align-top text-zinc-700 dark:text-zinc-300"
+                    title={row.location}
+                  >
                     {row.location}
                   </td>
-                  <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  <td
+                    className="truncate px-3 py-3 align-top text-zinc-700 dark:text-zinc-300"
+                    title={row.city ?? undefined}
+                  >
                     {row.city ?? "—"}
                   </td>
-                  <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  <td
+                    className="truncate px-3 py-3 align-top text-zinc-700 dark:text-zinc-300"
+                    title={row.phone ?? undefined}
+                  >
                     {row.phone ?? "—"}
                   </td>
-                  <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
-                    {row.email ?? "—"}
+                  <td className="px-3 py-3 align-top text-zinc-700 dark:text-zinc-300">
+                    {whatsappLabel(row.hasWhatsapp)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3 align-top">
                     {row.website ? (
                       <a
                         href={row.website}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+                        title={row.website}
+                        className="block truncate text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
                       >
                         {row.website.replace(/^https?:\/\//, "")}
                       </a>
@@ -597,7 +631,7 @@ export default function BusinessesPage() {
                       <span className="text-zinc-400">No website</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3 align-top">
                     <Link
                       href={`/searches/${row.searchId}`}
                       className="text-xs font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
@@ -605,8 +639,8 @@ export default function BusinessesPage() {
                       Open
                     </Link>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
+                  <td className="px-3 py-3 align-top">
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap">
                       <button
                         type="button"
                         onClick={() => openEdit(row)}

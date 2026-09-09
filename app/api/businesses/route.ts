@@ -1,9 +1,9 @@
-import { and, count, desc, eq, ilike, SQL } from "drizzle-orm";
+import { and, count, desc, eq, ilike, isNull, SQL } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
-import { searchBusinesses, searches } from "@/lib/db/schema";
+import { leads, searchBusinesses, searches } from "@/lib/db/schema";
 import { parseCityFromAddress } from "@/lib/geo/parse-city";
 
 const QuerySchema = z.object({
@@ -11,7 +11,7 @@ const QuerySchema = z.object({
   hasWebsite: z.enum(["true", "false"]).optional(),
   website: z.string().optional(),
   phone: z.string().optional(),
-  email: z.string().optional(),
+  hasWhatsapp: z.enum(["true", "false", "unchecked"]).optional(),
   q: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   offset: z.coerce.number().int().min(0).optional(),
@@ -28,6 +28,7 @@ export type BusinessListItem = {
   email: string | null;
   website: string | null;
   hasWebsite: boolean;
+  hasWhatsapp: boolean | null;
   address: string | null;
   rating: number | null;
   reviews: number | null;
@@ -45,6 +46,12 @@ function csvEscape(value: string | number | boolean | null | undefined): string 
   return str;
 }
 
+function whatsappLabel(value: boolean | null): string {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  return "Unchecked";
+}
+
 function toCsv(rows: BusinessListItem[]): string {
   const header = [
     "Title",
@@ -52,7 +59,7 @@ function toCsv(rows: BusinessListItem[]): string {
     "Location",
     "City",
     "Phone",
-    "Email",
+    "WhatsApp",
     "Website",
     "Has Website",
     "Address",
@@ -71,7 +78,7 @@ function toCsv(rows: BusinessListItem[]): string {
         csvEscape(row.location),
         csvEscape(row.city),
         csvEscape(row.phone),
-        csvEscape(row.email),
+        csvEscape(whatsappLabel(row.hasWhatsapp)),
         csvEscape(row.website),
         csvEscape(row.hasWebsite ? "Yes" : "No"),
         csvEscape(row.address),
@@ -95,7 +102,7 @@ export async function GET(request: Request) {
       hasWebsite: url.searchParams.get("hasWebsite") ?? undefined,
       website: url.searchParams.get("website") ?? undefined,
       phone: url.searchParams.get("phone") ?? undefined,
-      email: url.searchParams.get("email") ?? undefined,
+      hasWhatsapp: url.searchParams.get("hasWhatsapp") ?? undefined,
       q: url.searchParams.get("q") ?? undefined,
       limit: url.searchParams.get("limit") ?? undefined,
       offset: url.searchParams.get("offset") ?? undefined,
@@ -111,7 +118,7 @@ export async function GET(request: Request) {
       hasWebsite,
       website,
       phone,
-      email,
+      hasWhatsapp,
       q,
       format = "json",
     } = parsed.data;
@@ -137,8 +144,12 @@ export async function GET(request: Request) {
     if (phone?.trim()) {
       filters.push(ilike(searchBusinesses.phone, `%${phone.trim()}%`));
     }
-    if (email?.trim()) {
-      filters.push(ilike(searchBusinesses.email, `%${email.trim()}%`));
+    if (hasWhatsapp === "true") {
+      filters.push(eq(leads.hasWhatsapp, true));
+    } else if (hasWhatsapp === "false") {
+      filters.push(eq(leads.hasWhatsapp, false));
+    } else if (hasWhatsapp === "unchecked") {
+      filters.push(isNull(leads.hasWhatsapp));
     }
     if (q?.trim()) {
       filters.push(ilike(searchBusinesses.title, `%${q.trim()}%`));
@@ -151,6 +162,7 @@ export async function GET(request: Request) {
       .select({ total: count() })
       .from(searchBusinesses)
       .innerJoin(searches, eq(searchBusinesses.searchId, searches.id))
+      .leftJoin(leads, eq(leads.searchBusinessId, searchBusinesses.id))
       .where(whereClause);
 
     const rows = await db
@@ -163,6 +175,7 @@ export async function GET(request: Request) {
         email: searchBusinesses.email,
         website: searchBusinesses.website,
         hasWebsite: searchBusinesses.hasWebsite,
+        hasWhatsapp: leads.hasWhatsapp,
         address: searchBusinesses.address,
         rating: searchBusinesses.rating,
         reviews: searchBusinesses.reviews,
@@ -172,6 +185,7 @@ export async function GET(request: Request) {
       })
       .from(searchBusinesses)
       .innerJoin(searches, eq(searchBusinesses.searchId, searches.id))
+      .leftJoin(leads, eq(leads.searchBusinessId, searchBusinesses.id))
       .where(whereClause)
       .orderBy(desc(searchBusinesses.createdAt))
       .limit(limit)
@@ -187,6 +201,7 @@ export async function GET(request: Request) {
       email: row.email,
       website: row.website,
       hasWebsite: row.hasWebsite,
+      hasWhatsapp: row.hasWhatsapp,
       address: row.address,
       rating: row.rating,
       reviews: row.reviews,
