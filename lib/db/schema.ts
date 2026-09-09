@@ -148,6 +148,10 @@ export const leads = pgTable("leads", {
   longitude: real("longitude"),
   hasWhatsapp: boolean("has_whatsapp"),
   whatsappCheckedAt: timestamp("whatsapp_checked_at", { withTimezone: true }),
+  /** Comma-separated Instagram/Facebook (etc.) profile URLs. */
+  socials: text("socials"),
+  /** Placeholder for later website health checks (e.g. broken, copyright year). */
+  websiteStatus: text("website_status"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

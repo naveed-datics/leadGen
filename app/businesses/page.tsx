@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { parseCityFromAddress } from "@/lib/geo/parse-city";
 
 type BusinessRow = {
   id: string;
   title: string;
   industry: string;
   location: string;
-  city: string | null;
+  socials: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
@@ -51,6 +50,15 @@ type CheckNoWebsiteResponse = {
   error?: string;
 };
 
+type FindSocialsResponse = {
+  complete: boolean;
+  resumeAfter?: string;
+  checked: number;
+  moved: number;
+  remainingEstimate?: number;
+  error?: string;
+};
+
 const inputClass =
   "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
 
@@ -79,6 +87,11 @@ export default function BusinessesPage() {
   const [checkingWhatsapp, setCheckingWhatsapp] = useState(false);
   const [whatsappCheckedTotal, setWhatsappCheckedTotal] = useState(0);
   const [whatsappStatus, setWhatsappStatus] = useState<string | null>(null);
+
+  const [findingSocials, setFindingSocials] = useState(false);
+  const [socialsCheckedTotal, setSocialsCheckedTotal] = useState(0);
+  const [socialsMovedTotal, setSocialsMovedTotal] = useState(0);
+  const [socialsStatus, setSocialsStatus] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<BusinessRow | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({
@@ -253,7 +266,6 @@ export default function BusinessesPage() {
                 website: data.business!.website,
                 hasWebsite: data.business!.hasWebsite,
                 address: nextAddress,
-                city: parseCityFromAddress(nextAddress),
               }
             : item,
         ),
@@ -323,11 +335,72 @@ export default function BusinessesPage() {
     }
   }
 
+  async function findSocials() {
+    setFindingSocials(true);
+    setError(null);
+    setSocialsCheckedTotal(0);
+    setSocialsMovedTotal(0);
+    setSocialsStatus("Scanning websites for Instagram/Facebook…");
+    setWhatsappStatus(null);
+
+    let resumeAfter: string | undefined;
+    let totalChecked = 0;
+    let totalMoved = 0;
+
+    try {
+      for (;;) {
+        const res = await fetch("/api/businesses/find-socials", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(resumeAfter ? { resumeAfter } : {}),
+        });
+        const data = (await res.json()) as FindSocialsResponse;
+        if (!res.ok) {
+          setError(data.error ?? "Find Socials failed");
+          setSocialsStatus(null);
+          return;
+        }
+
+        totalChecked += data.checked ?? 0;
+        totalMoved += data.moved ?? 0;
+        setSocialsCheckedTotal(totalChecked);
+        setSocialsMovedTotal(totalMoved);
+
+        const remaining = data.remainingEstimate ?? 0;
+        if (data.complete) {
+          setSocialsStatus(
+            totalMoved === 0
+              ? "No Instagram/Facebook URLs found in website fields."
+              : `Done. Moved ${totalMoved} social URL${totalMoved === 1 ? "" : "s"} (scanned ${totalChecked}).`,
+          );
+          await load();
+          return;
+        }
+
+        setSocialsStatus(
+          `Scanned ${totalChecked}… moved ${totalMoved}… ${remaining} remaining`,
+        );
+        resumeAfter = data.resumeAfter;
+        if (!resumeAfter) {
+          setError("Find Socials paused without a resume point. Try again.");
+          setSocialsStatus(null);
+          return;
+        }
+      }
+    } catch {
+      setError("Network error while finding socials");
+      setSocialsStatus(null);
+    } finally {
+      setFindingSocials(false);
+    }
+  }
+
   async function checkWhatsappNoWebsite() {
     setCheckingWhatsapp(true);
     setError(null);
     setWhatsappCheckedTotal(0);
     setWhatsappStatus("Starting WhatsApp check…");
+    setSocialsStatus(null);
 
     let resumeAfter: string | undefined;
     let totalChecked = 0;
@@ -391,8 +464,18 @@ export default function BusinessesPage() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            onClick={() => void findSocials()}
+            disabled={findingSocials || checkingWhatsapp || loading}
+            className="rounded-xl border border-emerald-700 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-500 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+          >
+            {findingSocials
+              ? `Finding… (${socialsMovedTotal}/${socialsCheckedTotal})`
+              : "Find Socials"}
+          </button>
+          <button
+            type="button"
             onClick={() => void checkWhatsappNoWebsite()}
-            disabled={checkingWhatsapp || loading}
+            disabled={checkingWhatsapp || findingSocials || loading}
             className="rounded-xl border border-emerald-700 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-500 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
           >
             {checkingWhatsapp
@@ -402,7 +485,7 @@ export default function BusinessesPage() {
           <button
             type="button"
             onClick={() => void exportCsv()}
-            disabled={exporting || loading || checkingWhatsapp}
+            disabled={exporting || loading || checkingWhatsapp || findingSocials}
             className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-60"
           >
             {exporting ? "Exporting…" : "Export CSV"}
@@ -410,12 +493,12 @@ export default function BusinessesPage() {
         </div>
       </header>
 
-      {whatsappStatus && (
+      {(whatsappStatus || socialsStatus) && (
         <div
           role="status"
           className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100"
         >
-          {whatsappStatus}
+          {socialsStatus ?? whatsappStatus}
         </div>
       )}
 
@@ -537,10 +620,10 @@ export default function BusinessesPage() {
               <th className="w-[20%] px-3 py-3 font-medium">Business</th>
               <th className="w-[11%] px-3 py-3 font-medium">Industry</th>
               <th className="w-[11%] px-3 py-3 font-medium">Location</th>
-              <th className="w-[9%] px-3 py-3 font-medium">City</th>
+              <th className="w-[14%] px-3 py-3 font-medium">Social media</th>
               <th className="w-[11%] px-3 py-3 font-medium">Phone</th>
               <th className="w-[8%] px-3 py-3 font-medium">WhatsApp</th>
-              <th className="w-[14%] px-3 py-3 font-medium">Website</th>
+              <th className="w-[9%] px-3 py-3 font-medium">Website</th>
               <th className="w-[6%] px-3 py-3 font-medium">Search</th>
               <th className="w-[10%] px-3 py-3 font-medium">Actions</th>
             </tr>
@@ -601,11 +684,24 @@ export default function BusinessesPage() {
                   >
                     {row.location}
                   </td>
-                  <td
-                    className="truncate px-3 py-3 align-top text-zinc-700 dark:text-zinc-300"
-                    title={row.city ?? undefined}
-                  >
-                    {row.city ?? "—"}
+                  <td className="px-3 py-3 align-top">
+                    {row.socials ? (
+                      <a
+                        href={row.socials.split(",")[0]?.trim()}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={row.socials}
+                        className="block truncate text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+                      >
+                        {row.socials
+                          .split(",")
+                          .map((s) => s.trim().replace(/^https?:\/\//, ""))
+                          .filter(Boolean)
+                          .join(", ")}
+                      </a>
+                    ) : (
+                      <span className="text-zinc-400">—</span>
+                    )}
                   </td>
                   <td
                     className="truncate px-3 py-3 align-top text-zinc-700 dark:text-zinc-300"

@@ -4,7 +4,6 @@ import { z } from "zod";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { leads, searchBusinesses, searches } from "@/lib/db/schema";
-import { parseCityFromAddress } from "@/lib/geo/parse-city";
 
 const QuerySchema = z.object({
   industry: z.string().optional(),
@@ -23,7 +22,7 @@ export type BusinessListItem = {
   title: string;
   industry: string;
   location: string;
-  city: string | null;
+  socials: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
@@ -57,7 +56,7 @@ function toCsv(rows: BusinessListItem[]): string {
     "Title",
     "Industry",
     "Location",
-    "City",
+    "Socials",
     "Phone",
     "WhatsApp",
     "Website",
@@ -76,7 +75,7 @@ function toCsv(rows: BusinessListItem[]): string {
         csvEscape(row.title),
         csvEscape(row.industry),
         csvEscape(row.location),
-        csvEscape(row.city),
+        csvEscape(row.socials),
         csvEscape(row.phone),
         csvEscape(whatsappLabel(row.hasWhatsapp)),
         csvEscape(row.website),
@@ -176,6 +175,7 @@ export async function GET(request: Request) {
         website: searchBusinesses.website,
         hasWebsite: searchBusinesses.hasWebsite,
         hasWhatsapp: leads.hasWhatsapp,
+        socials: leads.socials,
         address: searchBusinesses.address,
         rating: searchBusinesses.rating,
         reviews: searchBusinesses.reviews,
@@ -196,7 +196,7 @@ export async function GET(request: Request) {
       title: row.title,
       industry: row.industry,
       location: row.location,
-      city: parseCityFromAddress(row.address),
+      socials: row.socials,
       phone: row.phone,
       email: row.email,
       website: row.website,

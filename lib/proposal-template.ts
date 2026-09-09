@@ -1,4 +1,5 @@
 import type { CompetitorWithStats } from "@/lib/types";
+import { isSocialWebsiteUrl } from "@/lib/social-urls";
 
 export interface ProposalTemplateInput {
   businessName: string;
@@ -28,33 +29,6 @@ So I put together a free demo site for you already — no cost, no obligation, j
 {{demoUrl}}
 
 If you like the direction, I can have it live and customized with your branding this week. What do you think — worth a quick chat?`;
-
-function isSocialWebsiteUrl(url: string): boolean {
-  try {
-    const { hostname } = new URL(url);
-    const host = hostname.toLowerCase().replace(/^www\./, "");
-    const socialHosts = new Set([
-      "facebook.com",
-      "fb.com",
-      "instagram.com",
-      "tiktok.com",
-      "twitter.com",
-      "x.com",
-      "linkedin.com",
-      "youtube.com",
-      "youtu.be",
-      "pinterest.com",
-      "snapchat.com",
-      "telegram.me",
-      "t.me",
-      "whatsapp.com",
-      "wa.me",
-    ]);
-    return socialHosts.has(host);
-  } catch {
-    return false;
-  }
-}
 
 function formatStatsLine(stats: CompetitorWithStats["stats"]): string | null {
   const parts: string[] = [];
