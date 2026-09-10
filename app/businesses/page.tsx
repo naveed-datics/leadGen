@@ -38,7 +38,18 @@ type WebsiteStateFilter =
   | "down"
   | "blocked"
   | "error"
-  | "unchecked";
+  | "unchecked"
+  | "copyright_2023"
+  | "copyright_2022"
+  | "copyright_2021"
+  | "copyright_2020";
+
+const COPYRIGHT_MAX_YEAR: Partial<Record<WebsiteStateFilter, number>> = {
+  copyright_2023: 2023,
+  copyright_2022: 2022,
+  copyright_2021: 2021,
+  copyright_2020: 2020,
+};
 
 type IndustryOption = {
   id: string;
@@ -145,6 +156,32 @@ function peopleContacts(contacts: BusinessContact[] | undefined): BusinessContac
   return (contacts ?? []).filter((contact) => contact.source !== "google-places");
 }
 
+function WhatsappIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+      <path d="M12.004 2c-5.514 0-9.997 4.483-9.997 9.997 0 1.763.464 3.482 1.345 4.997L2 22l5.146-1.35a9.96 9.96 0 0 0 4.858 1.238h.004c5.513 0 9.996-4.483 9.996-9.997C21.996 6.483 17.518 2 12.004 2zm0 18.176a8.16 8.16 0 0 1-4.166-1.14l-.299-.177-3.055.801.816-2.978-.194-.306a8.146 8.146 0 0 1-1.257-4.383c0-4.508 3.669-8.176 8.163-8.176 4.494 0 8.163 3.668 8.163 8.176 0 4.508-3.669 8.183-8.171 8.183z" />
+    </svg>
+  );
+}
+
+function CallIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  );
+}
+
 export default function BusinessesPage() {
   const [industry, setIndustry] = useState("");
   const [hasWebsite, setHasWebsite] = useState<"any" | "true" | "false">("any");
@@ -153,6 +190,7 @@ export default function BusinessesPage() {
   const [hasWhatsapp, setHasWhatsapp] = useState<WhatsappFilter>("any");
   const [websiteStateFilter, setWebsiteStateFilter] =
     useState<WebsiteStateFilter>("any");
+  const [location, setLocation] = useState("");
   const [industries, setIndustries] = useState<IndustryOption[]>([]);
 
   const [applied, setApplied] = useState({
@@ -162,6 +200,7 @@ export default function BusinessesPage() {
     phone: "",
     hasWhatsapp: "any" as WhatsappFilter,
     websiteState: "any" as WebsiteStateFilter,
+    location: "",
   });
 
   const [items, setItems] = useState<BusinessRow[]>([]);
@@ -210,8 +249,15 @@ export default function BusinessesPage() {
     if (applied.website.trim()) params.set("website", applied.website.trim());
     if (applied.phone.trim()) params.set("phone", applied.phone.trim());
     if (applied.hasWhatsapp !== "any") params.set("hasWhatsapp", applied.hasWhatsapp);
-    if (applied.websiteState !== "any")
-      params.set("websiteState", applied.websiteState);
+    if (applied.websiteState !== "any") {
+      const copyrightMaxYear = COPYRIGHT_MAX_YEAR[applied.websiteState];
+      if (copyrightMaxYear != null) {
+        params.set("copyrightMaxYear", String(copyrightMaxYear));
+      } else {
+        params.set("websiteState", applied.websiteState);
+      }
+    }
+    if (applied.location.trim()) params.set("location", applied.location.trim());
     params.set("limit", "200");
     return params.toString();
   }, [applied]);
@@ -275,6 +321,7 @@ export default function BusinessesPage() {
       phone,
       hasWhatsapp,
       websiteState: websiteStateFilter,
+      location,
     });
   }
 
@@ -285,6 +332,7 @@ export default function BusinessesPage() {
     setPhone("");
     setHasWhatsapp("any");
     setWebsiteStateFilter("any");
+    setLocation("");
     setApplied({
       industry: "",
       hasWebsite: "any",
@@ -292,13 +340,8 @@ export default function BusinessesPage() {
       phone: "",
       hasWhatsapp: "any",
       websiteState: "any",
+      location: "",
     });
-  }
-
-  function whatsappLabel(value: boolean | null): string {
-    if (value === true) return "Yes";
-    if (value === false) return "No";
-    return "—";
   }
 
   function websiteBadge(
@@ -797,7 +840,7 @@ export default function BusinessesPage() {
         onSubmit={applyFilters}
         className="mt-7 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
       >
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           <label className="block">
             <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
               Industry
@@ -887,7 +930,22 @@ export default function BusinessesPage() {
               <option value="blocked">Blocked</option>
               <option value="error">Error</option>
               <option value="unchecked">Unchecked</option>
+              <option value="copyright_2023">Copyright ≤ 2023</option>
+              <option value="copyright_2022">Copyright ≤ 2022</option>
+              <option value="copyright_2021">Copyright ≤ 2021</option>
+              <option value="copyright_2020">Copyright ≤ 2020</option>
             </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              Location
+            </span>
+            <input
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className={`mt-1.5 ${inputClass}`}
+              placeholder="Zip code or city"
+            />
           </label>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -930,24 +988,23 @@ export default function BusinessesPage() {
               <th className="w-[20%] px-3 py-3 font-medium">Business</th>
               <th className="w-[11%] px-3 py-3 font-medium">Industry</th>
               <th className="w-[11%] px-3 py-3 font-medium">Location</th>
-              <th className="w-[14%] px-3 py-3 font-medium">Social media</th>
-              <th className="w-[11%] px-3 py-3 font-medium">Phone</th>
-              <th className="w-[8%] px-3 py-3 font-medium">WhatsApp</th>
-              <th className="w-[9%] px-3 py-3 font-medium">Website</th>
+              <th className="w-[15%] px-3 py-3 font-medium">Social media</th>
+              <th className="w-[13%] px-3 py-3 font-medium">Phone</th>
+              <th className="w-[10%] px-3 py-3 font-medium">Website</th>
               <th className="w-[6%] px-3 py-3 font-medium">Search</th>
-              <th className="w-[10%] px-3 py-3 font-medium">Actions</th>
+              <th className="w-[14%] px-3 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-zinc-500">
+                <td colSpan={8} className="px-3 py-8 text-zinc-500">
                   Loading…
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-zinc-500">
+                <td colSpan={8} className="px-3 py-8 text-zinc-500">
                   No businesses match these filters.
                 </td>
               </tr>
@@ -1013,14 +1070,36 @@ export default function BusinessesPage() {
                       <span className="text-zinc-400">—</span>
                     )}
                   </td>
-                  <td
-                    className="truncate px-3 py-3 align-top text-zinc-700 dark:text-zinc-300"
-                    title={row.phone ?? undefined}
-                  >
-                    {row.phone ?? "—"}
-                  </td>
-                  <td className="px-3 py-3 align-top text-zinc-700 dark:text-zinc-300">
-                    {whatsappLabel(row.hasWhatsapp)}
+                  <td className="px-3 py-3 align-top">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="truncate text-zinc-700 dark:text-zinc-300"
+                        title={row.phone ?? undefined}
+                      >
+                        {row.phone ?? "—"}
+                      </span>
+                      {row.phone ? (
+                        row.hasWhatsapp ? (
+                          <a
+                            href={`https://wa.me/${row.phone.replace(/[^0-9]/g, "")}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Message on WhatsApp"
+                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+                          >
+                            <WhatsappIcon className="h-4 w-4" />
+                          </a>
+                        ) : (
+                          <a
+                            href={`tel:${row.phone}`}
+                            title="Call"
+                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-sky-600 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-950/40"
+                          >
+                            <CallIcon className="h-4 w-4" />
+                          </a>
+                        )
+                      ) : null}
+                    </div>
                   </td>
                   <td className="px-3 py-3 align-top">
                     {row.website ? (
@@ -1100,23 +1179,23 @@ export default function BusinessesPage() {
                         Delete
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => void openContacts(row)}
+                      className="mt-1.5 text-xs font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                    >
+                      View Detail
+                    </button>
                     {row.contactsVerifiedAt && verifyingId !== row.id ? (
-                      row.contactsStatus === "ok" && (row.contactsFound ?? 0) > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => void openContacts(row)}
-                          className="mt-1.5 text-xs font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
-                        >
-                          View {row.contactsFound} contact
-                          {row.contactsFound === 1 ? "" : "s"}
-                        </button>
-                      ) : (
-                        <p className="mt-1.5 text-xs text-zinc-400">
-                          {row.contactsStatus === "error"
-                            ? "Lookup failed"
-                            : "No contacts found"}
+                      row.contactsStatus === "error" ? (
+                        <p className="mt-1 text-xs text-zinc-400">
+                          Contact lookup failed
                         </p>
-                      )
+                      ) : row.contactsStatus === "none" ? (
+                        <p className="mt-1 text-xs text-zinc-400">
+                          No contacts found
+                        </p>
+                      ) : null
                     ) : null}
                   </td>
                 </tr>
@@ -1284,7 +1363,7 @@ export default function BusinessesPage() {
                   id="contacts-modal-title"
                   className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
                 >
-                  Contacts · {contactsModal.title}
+                  Business Detail · {contactsModal.title}
                 </h2>
                 <p className="mt-0.5 text-xs text-zinc-500">
                   {contactsModal.address ?? contactsModal.location}
@@ -1317,6 +1396,117 @@ export default function BusinessesPage() {
                 Source: B2B Leads Finder (searched by company name; results may
                 span franchises — match against the address above).
               </span>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-950/40">
+              <p className="font-semibold text-zinc-700 dark:text-zinc-200">
+                Business record
+              </p>
+              <dl className="mt-1.5 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
+                <dt className="text-zinc-400">Industry</dt>
+                <dd className="text-zinc-700 dark:text-zinc-300">
+                  {contactsModal.industry}
+                </dd>
+                <dt className="text-zinc-400">Location</dt>
+                <dd className="text-zinc-700 dark:text-zinc-300">
+                  {contactsModal.location}
+                </dd>
+                {contactsModal.phone ? (
+                  <>
+                    <dt className="text-zinc-400">Phone</dt>
+                    <dd className="text-zinc-700 dark:text-zinc-300">
+                      {contactsModal.phone}
+                      {contactsModal.hasWhatsapp ? " · WhatsApp" : ""}
+                    </dd>
+                  </>
+                ) : null}
+                {contactsModal.email ? (
+                  <>
+                    <dt className="text-zinc-400">Email</dt>
+                    <dd>
+                      <a
+                        href={`mailto:${contactsModal.email}`}
+                        className="text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+                      >
+                        {contactsModal.email}
+                      </a>
+                    </dd>
+                  </>
+                ) : null}
+                {contactsModal.website ? (
+                  <>
+                    <dt className="text-zinc-400">Website</dt>
+                    <dd className="flex flex-wrap items-center gap-1.5">
+                      <a
+                        href={contactsModal.website}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="break-all text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                      >
+                        {contactsModal.website}
+                      </a>
+                      {(() => {
+                        const badge = websiteBadge(
+                          contactsModal.websiteCheckState,
+                          contactsModal.websiteHttpStatus,
+                        );
+                        return badge ? (
+                          <span className={badge.className}>{badge.label}</span>
+                        ) : null;
+                      })()}
+                    </dd>
+                  </>
+                ) : null}
+                {contactsModal.copyrightText ? (
+                  <>
+                    <dt className="text-zinc-400">Copyright</dt>
+                    <dd className="text-zinc-700 dark:text-zinc-300">
+                      {contactsModal.copyrightText}
+                      {contactsModal.copyrightYear
+                        ? ` (${contactsModal.copyrightYear})`
+                        : ""}
+                    </dd>
+                  </>
+                ) : null}
+                {contactsModal.socials ? (
+                  <>
+                    <dt className="text-zinc-400">Social media</dt>
+                    <dd className="break-all text-zinc-700 dark:text-zinc-300">
+                      {contactsModal.socials}
+                    </dd>
+                  </>
+                ) : null}
+                {contactsModal.rating != null ? (
+                  <>
+                    <dt className="text-zinc-400">Rating</dt>
+                    <dd className="text-zinc-700 dark:text-zinc-300">
+                      {contactsModal.rating}
+                      {contactsModal.reviews != null
+                        ? ` (${contactsModal.reviews} reviews)`
+                        : ""}
+                    </dd>
+                  </>
+                ) : null}
+                {contactsModal.mapsUrl ? (
+                  <>
+                    <dt className="text-zinc-400">Maps</dt>
+                    <dd>
+                      <a
+                        href={contactsModal.mapsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                      >
+                        Open in Google Maps
+                      </a>
+                    </dd>
+                  </>
+                ) : null}
+                <dt className="text-zinc-400">Added</dt>
+                <dd className="text-zinc-700 dark:text-zinc-300">
+                  {new Date(contactsModal.createdAt).toLocaleString()}
+                </dd>
+              </dl>
             </div>
 
             {(() => {

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ilike, isNull, SQL } from "drizzle-orm";
+import { and, count, desc, eq, ilike, isNull, lte, or, SQL } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
@@ -12,6 +12,8 @@ const QuerySchema = z.object({
   phone: z.string().optional(),
   hasWhatsapp: z.enum(["true", "false", "unchecked"]).optional(),
   websiteState: z.enum(["ok", "down", "blocked", "error", "unchecked"]).optional(),
+  location: z.string().optional(),
+  copyrightMaxYear: z.coerce.number().int().optional(),
   q: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   offset: z.coerce.number().int().min(0).optional(),
@@ -124,6 +126,8 @@ export async function GET(request: Request) {
       phone: url.searchParams.get("phone") ?? undefined,
       hasWhatsapp: url.searchParams.get("hasWhatsapp") ?? undefined,
       websiteState: url.searchParams.get("websiteState") ?? undefined,
+      location: url.searchParams.get("location") ?? undefined,
+      copyrightMaxYear: url.searchParams.get("copyrightMaxYear") ?? undefined,
       q: url.searchParams.get("q") ?? undefined,
       limit: url.searchParams.get("limit") ?? undefined,
       offset: url.searchParams.get("offset") ?? undefined,
@@ -141,6 +145,8 @@ export async function GET(request: Request) {
       phone,
       hasWhatsapp,
       websiteState,
+      location,
+      copyrightMaxYear,
       q,
       format = "json",
     } = parsed.data;
@@ -177,6 +183,18 @@ export async function GET(request: Request) {
       filters.push(isNull(searchBusinesses.websiteCheckedAt));
     } else if (websiteState) {
       filters.push(eq(searchBusinesses.websiteCheckState, websiteState));
+    }
+    if (copyrightMaxYear != null) {
+      filters.push(lte(searchBusinesses.copyrightYear, copyrightMaxYear));
+    }
+    if (location?.trim()) {
+      const term = `%${location.trim()}%`;
+      filters.push(
+        or(
+          ilike(searches.location, term),
+          ilike(searchBusinesses.address, term),
+        )!,
+      );
     }
     if (q?.trim()) {
       filters.push(ilike(searchBusinesses.title, `%${q.trim()}%`));
