@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
@@ -17,9 +17,9 @@ export const maxDuration = 300;
 const REVERIFY_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 /**
  * Cost ceiling per lookup, in USD. The actor rejects any value below $0.50, so
- * this is its enforced minimum — it is only a safety cap, not the expected cost.
- * A single small-business lookup returns ~5-10 leads at ~$0.003-0.005 each
- * (~$0.02-0.05); empty runs are not charged.
+ * this is its enforced minimum — a safety cap, not the expected cost. A single
+ * small-business lookup returns a handful of leads at ~$0.003-0.005 each; empty
+ * runs are not charged.
  */
 const MAX_CHARGE_USD = 0.5;
 
@@ -31,17 +31,29 @@ const BodySchema = z.object({
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-function contactPayload(row: {
-  id: string;
-  name: string;
-  jobTitle: string | null;
-  linkedinUrl: string | null;
-  email: string | null;
-  emailConfidence: string | null;
-  phone: string | null;
-  source: string | null;
-}) {
-  return row;
+/** Every stored field — the popup shows all of them. */
+const CONTACT_COLUMNS = {
+  id: businessContacts.id,
+  name: businessContacts.name,
+  jobTitle: businessContacts.jobTitle,
+  linkedinUrl: businessContacts.linkedinUrl,
+  email: businessContacts.email,
+  emailConfidence: businessContacts.emailConfidence,
+  emailPattern: businessContacts.emailPattern,
+  phone: businessContacts.phone,
+  phoneSource: businessContacts.phoneSource,
+  source: businessContacts.source,
+  scrapedAt: businessContacts.scrapedAt,
+  rawJson: businessContacts.rawJson,
+} as const;
+
+async function loadContacts(businessId: string) {
+  const db = getDb();
+  return db
+    .select(CONTACT_COLUMNS)
+    .from(businessContacts)
+    .where(eq(businessContacts.searchBusinessId, businessId))
+    .orderBy(asc(businessContacts.createdAt));
 }
 
 export async function POST(request: Request, context: RouteContext) {
@@ -79,9 +91,6 @@ export async function POST(request: Request, context: RouteContext) {
       .select({
         id: searchBusinesses.id,
         title: searchBusinesses.title,
-        website: searchBusinesses.website,
-        location: searches.location,
-        agentId: searches.agentId,
         contactsVerifiedAt: searchBusinesses.contactsVerifiedAt,
         contactsStatus: searchBusinesses.contactsStatus,
       })
@@ -106,31 +115,15 @@ export async function POST(request: Request, context: RouteContext) {
       Date.now() - business.contactsVerifiedAt.getTime() < REVERIFY_COOLDOWN_MS;
 
     if (recentlyOk && !force) {
-      const existing = await db
-        .select({
-          id: businessContacts.id,
-          name: businessContacts.name,
-          jobTitle: businessContacts.jobTitle,
-          linkedinUrl: businessContacts.linkedinUrl,
-          email: businessContacts.email,
-          emailConfidence: businessContacts.emailConfidence,
-          phone: businessContacts.phone,
-          source: businessContacts.source,
-        })
-        .from(businessContacts)
-        .where(eq(businessContacts.searchBusinessId, id));
+      const existing = await loadContacts(id);
       return NextResponse.json({
         cached: true,
         found: existing.length,
-        contacts: existing.map(contactPayload),
+        contacts: existing,
       });
     }
 
-    const company = toCompanyQuery(
-      business.website,
-      business.title,
-      business.location,
-    );
+    const company = toCompanyQuery(business.title);
 
     let leads: B2BLead[];
     try {
@@ -170,6 +163,7 @@ export async function POST(request: Request, context: RouteContext) {
           phoneSource: lead.phoneSource,
           source: lead.source,
           scrapedAt: lead.scrapedAt ? new Date(lead.scrapedAt) : null,
+          rawJson: lead.raw,
         })),
       );
     }
@@ -183,25 +177,11 @@ export async function POST(request: Request, context: RouteContext) {
       })
       .where(eq(searchBusinesses.id, id));
 
-    const saved = await db
-      .select({
-        id: businessContacts.id,
-        name: businessContacts.name,
-        jobTitle: businessContacts.jobTitle,
-        linkedinUrl: businessContacts.linkedinUrl,
-        email: businessContacts.email,
-        emailConfidence: businessContacts.emailConfidence,
-        phone: businessContacts.phone,
-        source: businessContacts.source,
-      })
-      .from(businessContacts)
-      .where(eq(businessContacts.searchBusinessId, id));
-
     return NextResponse.json({
       cached: false,
       query: company,
       found: leads.length,
-      contacts: saved.map(contactPayload),
+      contacts: await loadContacts(id),
     });
   } catch (error) {
     if (error instanceof AuthError) {

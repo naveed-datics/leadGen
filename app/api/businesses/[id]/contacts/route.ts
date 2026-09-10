@@ -36,8 +36,12 @@ export async function GET(_request: Request, context: RouteContext) {
         linkedinUrl: businessContacts.linkedinUrl,
         email: businessContacts.email,
         emailConfidence: businessContacts.emailConfidence,
+        emailPattern: businessContacts.emailPattern,
         phone: businessContacts.phone,
+        phoneSource: businessContacts.phoneSource,
         source: businessContacts.source,
+        scrapedAt: businessContacts.scrapedAt,
+        rawJson: businessContacts.rawJson,
       })
       .from(businessContacts)
       .where(eq(businessContacts.searchBusinessId, id))

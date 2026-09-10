@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type BusinessRow = {
   id: string;
@@ -82,8 +82,12 @@ type BusinessContact = {
   linkedinUrl: string | null;
   email: string | null;
   emailConfidence: string | null;
+  emailPattern: string | null;
   phone: string | null;
+  phoneSource: string | null;
   source: string | null;
+  scrapedAt: string | null;
+  rawJson: unknown;
 };
 
 type VerifyContactsResponse = {
@@ -165,9 +169,7 @@ export default function BusinessesPage() {
   const [deleteTarget, setDeleteTarget] = useState<BusinessRow | null>(null);
 
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
-  const [expandedContactsId, setExpandedContactsId] = useState<string | null>(
-    null,
-  );
+  const [contactsModal, setContactsModal] = useState<BusinessRow | null>(null);
   const [contactsByBusiness, setContactsByBusiness] = useState<
     Record<string, BusinessContact[]>
   >({});
@@ -441,23 +443,20 @@ export default function BusinessesPage() {
       }
 
       const result = data as VerifyContactsResponse;
+      const nextRow: BusinessRow = {
+        ...row,
+        contactsFound: result.found,
+        contactsStatus: result.found > 0 ? "ok" : "none",
+        contactsVerifiedAt: new Date().toISOString(),
+      };
       setContactsByBusiness((prev) => ({
         ...prev,
         [row.id]: result.contacts,
       }));
-      setExpandedContactsId(result.found > 0 ? row.id : null);
       setItems((prev) =>
-        prev.map((item) =>
-          item.id === row.id
-            ? {
-                ...item,
-                contactsFound: result.found,
-                contactsStatus: result.found > 0 ? "ok" : "none",
-                contactsVerifiedAt: new Date().toISOString(),
-              }
-            : item,
-        ),
+        prev.map((item) => (item.id === row.id ? nextRow : item)),
       );
+      setContactsModal(nextRow);
     } catch {
       setError("Network error while verifying contacts");
     } finally {
@@ -465,12 +464,8 @@ export default function BusinessesPage() {
     }
   }
 
-  async function toggleContacts(row: BusinessRow) {
-    if (expandedContactsId === row.id) {
-      setExpandedContactsId(null);
-      return;
-    }
-    setExpandedContactsId(row.id);
+  async function openContacts(row: BusinessRow) {
+    setContactsModal(row);
     if (contactsByBusiness[row.id]) return;
 
     setLoadingContactsId(row.id);
@@ -483,7 +478,7 @@ export default function BusinessesPage() {
         setContactsByBusiness((prev) => ({ ...prev, [row.id]: data.contacts }));
       }
     } catch {
-      // leave panel empty; the Verify button can retry
+      // leave the modal empty; the Verify button can retry
     } finally {
       setLoadingContactsId(null);
     }
@@ -930,8 +925,10 @@ export default function BusinessesPage() {
               </tr>
             ) : (
               items.map((row) => (
-                <Fragment key={row.id}>
-                <tr className="border-t border-zinc-100 dark:border-zinc-800">
+                <tr
+                  key={row.id}
+                  className="border-t border-zinc-100 dark:border-zinc-800"
+                >
                   <td className="px-3 py-3 align-top">
                     <div className="truncate font-medium text-zinc-900 dark:text-zinc-50">
                       {row.mapsUrl ? (
@@ -1079,11 +1076,10 @@ export default function BusinessesPage() {
                       row.contactsStatus === "ok" && (row.contactsFound ?? 0) > 0 ? (
                         <button
                           type="button"
-                          onClick={() => void toggleContacts(row)}
+                          onClick={() => void openContacts(row)}
                           className="mt-1.5 text-xs font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
                         >
-                          {expandedContactsId === row.id ? "Hide" : "Show"}{" "}
-                          {row.contactsFound} contact
+                          View {row.contactsFound} contact
                           {row.contactsFound === 1 ? "" : "s"}
                         </button>
                       ) : (
@@ -1096,77 +1092,6 @@ export default function BusinessesPage() {
                     ) : null}
                   </td>
                 </tr>
-                {expandedContactsId === row.id && (
-                  <tr className="border-t border-zinc-100 bg-zinc-50/60 dark:border-zinc-800 dark:bg-zinc-950/40">
-                    <td colSpan={9} className="px-3 py-3">
-                      {loadingContactsId === row.id ? (
-                        <p className="text-xs text-zinc-500">Loading contacts…</p>
-                      ) : (contactsByBusiness[row.id]?.length ?? 0) === 0 ? (
-                        <p className="text-xs text-zinc-500">
-                          No contacts to show.
-                        </p>
-                      ) : (
-                        <ul className="flex flex-col gap-2">
-                          {contactsByBusiness[row.id]?.map((contact) => (
-                            <li
-                              key={contact.id}
-                              className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
-                            >
-                              <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-                                {contact.name}
-                              </span>
-                              {contact.jobTitle ? (
-                                <span className="text-zinc-500">
-                                  {contact.jobTitle}
-                                </span>
-                              ) : null}
-                              {contact.email ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <a
-                                    href={`mailto:${contact.email}`}
-                                    className="text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-                                  >
-                                    {contact.email}
-                                  </a>
-                                  {contact.emailConfidence ? (
-                                    <span
-                                      className={`rounded px-1 py-0.5 text-[10px] font-semibold uppercase ${
-                                        contact.emailConfidence === "found"
-                                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
-                                          : contact.emailConfidence ===
-                                              "pattern_matched"
-                                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
-                                            : "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
-                                      }`}
-                                    >
-                                      {contact.emailConfidence.replace("_", " ")}
-                                    </span>
-                                  ) : null}
-                                </span>
-                              ) : null}
-                              {contact.phone ? (
-                                <span className="text-zinc-600 dark:text-zinc-300">
-                                  {contact.phone}
-                                </span>
-                              ) : null}
-                              {contact.linkedinUrl ? (
-                                <a
-                                  href={contact.linkedinUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
-                                >
-                                  LinkedIn
-                                </a>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </td>
-                  </tr>
-                )}
-                </Fragment>
               ))
             )}
           </tbody>
@@ -1312,6 +1237,174 @@ export default function BusinessesPage() {
               >
                 {deletingId === deleteTarget.id ? "Deleting…" : "Delete"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {contactsModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contacts-modal-title"
+        >
+          <div className="my-8 w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="contacts-modal-title"
+                  className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
+                >
+                  Contacts · {contactsModal.title}
+                </h2>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  {contactsModal.address ?? contactsModal.location}
+                  {contactsModal.contactsVerifiedAt
+                    ? ` · verified ${new Date(
+                        contactsModal.contactsVerifiedAt,
+                      ).toLocaleString()}`
+                    : null}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setContactsModal(null)}
+                className="rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void verifyContacts(contactsModal)}
+                disabled={verifyingId === contactsModal.id}
+                className="rounded-lg border border-sky-300 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40"
+              >
+                {verifyingId === contactsModal.id ? "Re-verifying…" : "Re-verify"}
+              </button>
+              <span className="text-xs text-zinc-400">
+                Source: B2B Leads Finder (searched by company name; results may
+                span franchises — match against the address above).
+              </span>
+            </div>
+
+            <div className="mt-4">
+              {loadingContactsId === contactsModal.id ? (
+                <p className="text-sm text-zinc-500">Loading contacts…</p>
+              ) : (contactsByBusiness[contactsModal.id]?.length ?? 0) === 0 ? (
+                <p className="text-sm text-zinc-500">No contacts found.</p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {contactsByBusiness[contactsModal.id]?.map((contact) => (
+                    <li
+                      key={contact.id}
+                      className="rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-800"
+                    >
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                          {contact.name}
+                        </span>
+                        {contact.jobTitle ? (
+                          <span className="text-xs text-zinc-500">
+                            {contact.jobTitle}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-xs">
+                        {contact.email ? (
+                          <>
+                            <dt className="text-zinc-400">Email</dt>
+                            <dd className="flex flex-wrap items-center gap-1.5">
+                              <a
+                                href={`mailto:${contact.email}`}
+                                className="text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+                              >
+                                {contact.email}
+                              </a>
+                              {contact.emailConfidence ? (
+                                <span
+                                  className={`rounded px-1 py-0.5 text-[10px] font-semibold uppercase ${
+                                    contact.emailConfidence === "found"
+                                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                                      : contact.emailConfidence ===
+                                          "pattern_matched"
+                                        ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                                        : "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                                  }`}
+                                >
+                                  {contact.emailConfidence.replace("_", " ")}
+                                </span>
+                              ) : null}
+                              {contact.emailPattern ? (
+                                <span className="text-zinc-400">
+                                  ({contact.emailPattern})
+                                </span>
+                              ) : null}
+                            </dd>
+                          </>
+                        ) : null}
+                        {contact.phone ? (
+                          <>
+                            <dt className="text-zinc-400">Phone</dt>
+                            <dd className="text-zinc-700 dark:text-zinc-300">
+                              {contact.phone}
+                              {contact.phoneSource
+                                ? ` · ${contact.phoneSource}`
+                                : ""}
+                            </dd>
+                          </>
+                        ) : null}
+                        {contact.linkedinUrl ? (
+                          <>
+                            <dt className="text-zinc-400">LinkedIn</dt>
+                            <dd>
+                              <a
+                                href={contact.linkedinUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="break-all text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                              >
+                                {contact.linkedinUrl}
+                              </a>
+                            </dd>
+                          </>
+                        ) : null}
+                        {contact.source ? (
+                          <>
+                            <dt className="text-zinc-400">Source</dt>
+                            <dd className="text-zinc-700 dark:text-zinc-300">
+                              {contact.source}
+                            </dd>
+                          </>
+                        ) : null}
+                        {contact.scrapedAt ? (
+                          <>
+                            <dt className="text-zinc-400">Scraped</dt>
+                            <dd className="text-zinc-700 dark:text-zinc-300">
+                              {new Date(contact.scrapedAt).toLocaleString()}
+                            </dd>
+                          </>
+                        ) : null}
+                      </dl>
+
+                      {contact.rawJson ? (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
+                            Raw response
+                          </summary>
+                          <pre className="mt-1 max-h-64 overflow-auto rounded-lg bg-zinc-100 p-2 text-[11px] leading-relaxed text-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
+                            {JSON.stringify(contact.rawJson, null, 2)}
+                          </pre>
+                        </details>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </div>

@@ -296,6 +296,8 @@ export const businessContacts = pgTable(
     /** "linkedin-serp" | "website-scrape" */
     source: text("source"),
     scrapedAt: timestamp("scraped_at", { withTimezone: true }),
+    /** The complete unmodified actor record for this contact. */
+    rawJson: jsonb("raw_json"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
