@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 type BusinessRow = {
   id: string;
@@ -19,6 +19,9 @@ type BusinessRow = {
   websiteCheckedAt: string | null;
   copyrightText: string | null;
   copyrightYear: number | null;
+  contactsFound: number | null;
+  contactsStatus: string | null;
+  contactsVerifiedAt: string | null;
   address: string | null;
   rating: number | null;
   reviews: number | null;
@@ -69,6 +72,30 @@ type FindSocialsResponse = {
   checked: number;
   moved: number;
   remainingEstimate?: number;
+  error?: string;
+};
+
+type BusinessContact = {
+  id: string;
+  name: string;
+  jobTitle: string | null;
+  linkedinUrl: string | null;
+  email: string | null;
+  emailConfidence: string | null;
+  phone: string | null;
+  source: string | null;
+};
+
+type VerifyContactsResponse = {
+  cached?: boolean;
+  query?: string;
+  found: number;
+  contacts: BusinessContact[];
+  error?: string;
+};
+
+type ContactsResponse = {
+  contacts: BusinessContact[];
   error?: string;
 };
 
@@ -136,6 +163,15 @@ export default function BusinessesPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BusinessRow | null>(null);
+
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [expandedContactsId, setExpandedContactsId] = useState<string | null>(
+    null,
+  );
+  const [contactsByBusiness, setContactsByBusiness] = useState<
+    Record<string, BusinessContact[]>
+  >({});
+  const [loadingContactsId, setLoadingContactsId] = useState<string | null>(null);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -370,6 +406,86 @@ export default function BusinessesPage() {
       setError("Network error while deleting");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function verifyContacts(row: BusinessRow) {
+    setVerifyingId(row.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/businesses/${row.id}/verify-contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | VerifyContactsResponse
+        | { error?: string }
+        | null;
+      if (!res.ok || !data || "error" in data) {
+        setError(
+          (data && "error" in data && data.error) || "Contact lookup failed",
+        );
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === row.id
+              ? {
+                  ...item,
+                  contactsStatus: "error",
+                  contactsVerifiedAt: new Date().toISOString(),
+                }
+              : item,
+          ),
+        );
+        return;
+      }
+
+      const result = data as VerifyContactsResponse;
+      setContactsByBusiness((prev) => ({
+        ...prev,
+        [row.id]: result.contacts,
+      }));
+      setExpandedContactsId(result.found > 0 ? row.id : null);
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === row.id
+            ? {
+                ...item,
+                contactsFound: result.found,
+                contactsStatus: result.found > 0 ? "ok" : "none",
+                contactsVerifiedAt: new Date().toISOString(),
+              }
+            : item,
+        ),
+      );
+    } catch {
+      setError("Network error while verifying contacts");
+    } finally {
+      setVerifyingId(null);
+    }
+  }
+
+  async function toggleContacts(row: BusinessRow) {
+    if (expandedContactsId === row.id) {
+      setExpandedContactsId(null);
+      return;
+    }
+    setExpandedContactsId(row.id);
+    if (contactsByBusiness[row.id]) return;
+
+    setLoadingContactsId(row.id);
+    try {
+      const res = await fetch(`/api/businesses/${row.id}/contacts`, {
+        cache: "no-store",
+      });
+      const data = (await res.json().catch(() => null)) as ContactsResponse | null;
+      if (res.ok && data && Array.isArray(data.contacts)) {
+        setContactsByBusiness((prev) => ({ ...prev, [row.id]: data.contacts }));
+      }
+    } catch {
+      // leave panel empty; the Verify button can retry
+    } finally {
+      setLoadingContactsId(null);
     }
   }
 
@@ -814,10 +930,8 @@ export default function BusinessesPage() {
               </tr>
             ) : (
               items.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-t border-zinc-100 dark:border-zinc-800"
-                >
+                <Fragment key={row.id}>
+                <tr className="border-t border-zinc-100 dark:border-zinc-800">
                   <td className="px-3 py-3 align-top">
                     <div className="truncate font-medium text-zinc-900 dark:text-zinc-50">
                       {row.mapsUrl ? (
@@ -935,6 +1049,18 @@ export default function BusinessesPage() {
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap">
                       <button
                         type="button"
+                        onClick={() => void verifyContacts(row)}
+                        disabled={verifyingId === row.id}
+                        className="rounded-lg border border-sky-300 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                      >
+                        {verifyingId === row.id
+                          ? "Verifying…"
+                          : row.contactsVerifiedAt
+                            ? "Re-verify"
+                            : "Verify"}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => openEdit(row)}
                         className="rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
                       >
@@ -949,8 +1075,98 @@ export default function BusinessesPage() {
                         Delete
                       </button>
                     </div>
+                    {row.contactsVerifiedAt && verifyingId !== row.id ? (
+                      row.contactsStatus === "ok" && (row.contactsFound ?? 0) > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => void toggleContacts(row)}
+                          className="mt-1.5 text-xs font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                        >
+                          {expandedContactsId === row.id ? "Hide" : "Show"}{" "}
+                          {row.contactsFound} contact
+                          {row.contactsFound === 1 ? "" : "s"}
+                        </button>
+                      ) : (
+                        <p className="mt-1.5 text-xs text-zinc-400">
+                          {row.contactsStatus === "error"
+                            ? "Lookup failed"
+                            : "No contacts found"}
+                        </p>
+                      )
+                    ) : null}
                   </td>
                 </tr>
+                {expandedContactsId === row.id && (
+                  <tr className="border-t border-zinc-100 bg-zinc-50/60 dark:border-zinc-800 dark:bg-zinc-950/40">
+                    <td colSpan={9} className="px-3 py-3">
+                      {loadingContactsId === row.id ? (
+                        <p className="text-xs text-zinc-500">Loading contacts…</p>
+                      ) : (contactsByBusiness[row.id]?.length ?? 0) === 0 ? (
+                        <p className="text-xs text-zinc-500">
+                          No contacts to show.
+                        </p>
+                      ) : (
+                        <ul className="flex flex-col gap-2">
+                          {contactsByBusiness[row.id]?.map((contact) => (
+                            <li
+                              key={contact.id}
+                              className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
+                            >
+                              <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                                {contact.name}
+                              </span>
+                              {contact.jobTitle ? (
+                                <span className="text-zinc-500">
+                                  {contact.jobTitle}
+                                </span>
+                              ) : null}
+                              {contact.email ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <a
+                                    href={`mailto:${contact.email}`}
+                                    className="text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+                                  >
+                                    {contact.email}
+                                  </a>
+                                  {contact.emailConfidence ? (
+                                    <span
+                                      className={`rounded px-1 py-0.5 text-[10px] font-semibold uppercase ${
+                                        contact.emailConfidence === "found"
+                                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                                          : contact.emailConfidence ===
+                                              "pattern_matched"
+                                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                                            : "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                                      }`}
+                                    >
+                                      {contact.emailConfidence.replace("_", " ")}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              ) : null}
+                              {contact.phone ? (
+                                <span className="text-zinc-600 dark:text-zinc-300">
+                                  {contact.phone}
+                                </span>
+                              ) : null}
+                              {contact.linkedinUrl ? (
+                                <a
+                                  href={contact.linkedinUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                                >
+                                  LinkedIn
+                                </a>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))
             )}
           </tbody>

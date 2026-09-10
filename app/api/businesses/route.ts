@@ -34,6 +34,9 @@ export type BusinessListItem = {
   websiteCheckedAt: string | null;
   copyrightText: string | null;
   copyrightYear: number | null;
+  contactsFound: number | null;
+  contactsStatus: string | null;
+  contactsVerifiedAt: string | null;
   address: string | null;
   rating: number | null;
   reviews: number | null;
@@ -71,6 +74,8 @@ function toCsv(rows: BusinessListItem[]): string {
     "HTTP Status",
     "Copyright",
     "Copyright Year",
+    "Contacts Found",
+    "Contacts Status",
     "Address",
     "Rating",
     "Reviews",
@@ -94,6 +99,8 @@ function toCsv(rows: BusinessListItem[]): string {
         csvEscape(row.websiteHttpStatus),
         csvEscape(row.copyrightText),
         csvEscape(row.copyrightYear),
+        csvEscape(row.contactsFound),
+        csvEscape(row.contactsStatus ?? ""),
         csvEscape(row.address),
         csvEscape(row.rating),
         csvEscape(row.reviews),
@@ -201,6 +208,9 @@ export async function GET(request: Request) {
         websiteCheckedAt: searchBusinesses.websiteCheckedAt,
         copyrightText: searchBusinesses.copyrightText,
         copyrightYear: searchBusinesses.copyrightYear,
+        contactsFound: searchBusinesses.contactsFound,
+        contactsStatus: searchBusinesses.contactsStatus,
+        contactsVerifiedAt: searchBusinesses.contactsVerifiedAt,
         socials: leads.socials,
         address: searchBusinesses.address,
         rating: searchBusinesses.rating,
@@ -235,6 +245,11 @@ export async function GET(request: Request) {
         : null,
       copyrightText: row.copyrightText,
       copyrightYear: row.copyrightYear,
+      contactsFound: row.contactsFound,
+      contactsStatus: row.contactsStatus,
+      contactsVerifiedAt: row.contactsVerifiedAt
+        ? row.contactsVerifiedAt.toISOString()
+        : null,
       address: row.address,
       rating: row.rating,
       reviews: row.reviews,

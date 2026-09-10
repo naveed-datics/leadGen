@@ -15,6 +15,7 @@
     "db:migrate:demo-gen-integration": "tsx scripts/apply-demo-gen-integration-migration.ts",
     "db:migrate:search-data-source": "tsx scripts/apply-search-data-source-migration.ts",
     "db:migrate:website-health": "tsx scripts/apply-website-health-migration.ts",
+    "db:migrate:business-contacts": "tsx scripts/apply-business-contacts-migration.ts",
     "db:studio": "drizzle-kit studio",
     "cron:follow-ups": "tsx scripts/cron-follow-ups.ts"
   },

@@ -130,6 +130,12 @@ export const searchBusinesses = pgTable("search_businesses", {
   copyrightText: text("copyright_text"),
   /** Trailing 4-digit year parsed from the copyright line (stale-site signal). */
   copyrightYear: integer("copyright_year"),
+  /** Last time the B2B Leads Finder contact lookup ran for this business. */
+  contactsVerifiedAt: timestamp("contacts_verified_at", { withTimezone: true }),
+  /** Number of contact people saved from the last lookup. */
+  contactsFound: integer("contacts_found"),
+  /** Outcome of the last contact lookup: "ok" | "none" | "error". */
+  contactsStatus: text("contacts_status"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -270,6 +276,34 @@ export const leadCompetitorPicks = pgTable("lead_competitor_picks", {
     .defaultNow()
     .notNull(),
 });
+
+export const businessContacts = pgTable(
+  "business_contacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    searchBusinessId: uuid("search_business_id")
+      .notNull()
+      .references(() => searchBusinesses.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    jobTitle: text("job_title"),
+    linkedinUrl: text("linkedin_url"),
+    email: text("email"),
+    /** "found" | "pattern_matched" | "guessed" */
+    emailConfidence: text("email_confidence"),
+    emailPattern: text("email_pattern"),
+    phone: text("phone"),
+    phoneSource: text("phone_source"),
+    /** "linkedin-serp" | "website-scrape" */
+    source: text("source"),
+    scrapedAt: timestamp("scraped_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("business_contacts_business_idx").on(table.searchBusinessId),
+  ],
+);
 
 export const searchActivityLogs = pgTable("search_activity_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
