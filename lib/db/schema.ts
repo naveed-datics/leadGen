@@ -121,6 +121,15 @@ export const searchBusinesses = pgTable("search_businesses", {
   mapsUrl: text("maps_url"),
   thumbnail: text("thumbnail"),
   serpPosition: integer("serp_position"),
+  /** Last observed HTTP status from a website health check (null if never reached). */
+  websiteHttpStatus: integer("website_http_status"),
+  /** Website health check outcome: "ok" | "down" | "blocked" | "error". */
+  websiteCheckState: text("website_check_state"),
+  websiteCheckedAt: timestamp("website_checked_at", { withTimezone: true }),
+  /** Raw copyright line scraped from the homepage footer, trimmed to ~200 chars. */
+  copyrightText: text("copyright_text"),
+  /** Trailing 4-digit year parsed from the copyright line (stale-site signal). */
+  copyrightYear: integer("copyright_year"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

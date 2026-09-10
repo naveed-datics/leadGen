@@ -11,6 +11,7 @@ const QuerySchema = z.object({
   website: z.string().optional(),
   phone: z.string().optional(),
   hasWhatsapp: z.enum(["true", "false", "unchecked"]).optional(),
+  websiteState: z.enum(["ok", "down", "blocked", "error", "unchecked"]).optional(),
   q: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   offset: z.coerce.number().int().min(0).optional(),
@@ -28,6 +29,11 @@ export type BusinessListItem = {
   website: string | null;
   hasWebsite: boolean;
   hasWhatsapp: boolean | null;
+  websiteCheckState: string | null;
+  websiteHttpStatus: number | null;
+  websiteCheckedAt: string | null;
+  copyrightText: string | null;
+  copyrightYear: number | null;
   address: string | null;
   rating: number | null;
   reviews: number | null;
@@ -61,6 +67,10 @@ function toCsv(rows: BusinessListItem[]): string {
     "WhatsApp",
     "Website",
     "Has Website",
+    "Website Status",
+    "HTTP Status",
+    "Copyright",
+    "Copyright Year",
     "Address",
     "Rating",
     "Reviews",
@@ -80,6 +90,10 @@ function toCsv(rows: BusinessListItem[]): string {
         csvEscape(whatsappLabel(row.hasWhatsapp)),
         csvEscape(row.website),
         csvEscape(row.hasWebsite ? "Yes" : "No"),
+        csvEscape(row.websiteCheckState ?? ""),
+        csvEscape(row.websiteHttpStatus),
+        csvEscape(row.copyrightText),
+        csvEscape(row.copyrightYear),
         csvEscape(row.address),
         csvEscape(row.rating),
         csvEscape(row.reviews),
@@ -102,6 +116,7 @@ export async function GET(request: Request) {
       website: url.searchParams.get("website") ?? undefined,
       phone: url.searchParams.get("phone") ?? undefined,
       hasWhatsapp: url.searchParams.get("hasWhatsapp") ?? undefined,
+      websiteState: url.searchParams.get("websiteState") ?? undefined,
       q: url.searchParams.get("q") ?? undefined,
       limit: url.searchParams.get("limit") ?? undefined,
       offset: url.searchParams.get("offset") ?? undefined,
@@ -118,6 +133,7 @@ export async function GET(request: Request) {
       website,
       phone,
       hasWhatsapp,
+      websiteState,
       q,
       format = "json",
     } = parsed.data;
@@ -150,6 +166,11 @@ export async function GET(request: Request) {
     } else if (hasWhatsapp === "unchecked") {
       filters.push(isNull(leads.hasWhatsapp));
     }
+    if (websiteState === "unchecked") {
+      filters.push(isNull(searchBusinesses.websiteCheckedAt));
+    } else if (websiteState) {
+      filters.push(eq(searchBusinesses.websiteCheckState, websiteState));
+    }
     if (q?.trim()) {
       filters.push(ilike(searchBusinesses.title, `%${q.trim()}%`));
     }
@@ -175,6 +196,11 @@ export async function GET(request: Request) {
         website: searchBusinesses.website,
         hasWebsite: searchBusinesses.hasWebsite,
         hasWhatsapp: leads.hasWhatsapp,
+        websiteCheckState: searchBusinesses.websiteCheckState,
+        websiteHttpStatus: searchBusinesses.websiteHttpStatus,
+        websiteCheckedAt: searchBusinesses.websiteCheckedAt,
+        copyrightText: searchBusinesses.copyrightText,
+        copyrightYear: searchBusinesses.copyrightYear,
         socials: leads.socials,
         address: searchBusinesses.address,
         rating: searchBusinesses.rating,
@@ -202,6 +228,13 @@ export async function GET(request: Request) {
       website: row.website,
       hasWebsite: row.hasWebsite,
       hasWhatsapp: row.hasWhatsapp,
+      websiteCheckState: row.websiteCheckState,
+      websiteHttpStatus: row.websiteHttpStatus,
+      websiteCheckedAt: row.websiteCheckedAt
+        ? row.websiteCheckedAt.toISOString()
+        : null,
+      copyrightText: row.copyrightText,
+      copyrightYear: row.copyrightYear,
       address: row.address,
       rating: row.rating,
       reviews: row.reviews,
