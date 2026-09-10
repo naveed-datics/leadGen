@@ -10,6 +10,11 @@ import {
 } from "@/lib/b2b-leads";
 import { getDb } from "@/lib/db/index";
 import { businessContacts, searchBusinesses, searches } from "@/lib/db/schema";
+import {
+  findPlaceDetails,
+  isGooglePlacesCrawlerConfigured,
+  type GooglePlaceResult,
+} from "@/lib/google-places-crawler";
 
 export const maxDuration = 300;
 
@@ -45,6 +50,16 @@ const CONTACT_COLUMNS = {
   source: businessContacts.source,
   scrapedAt: businessContacts.scrapedAt,
   rawJson: businessContacts.rawJson,
+  placeTitle: businessContacts.placeTitle,
+  placeAddress: businessContacts.placeAddress,
+  placePhone: businessContacts.placePhone,
+  placeWebsite: businessContacts.placeWebsite,
+  placeId: businessContacts.placeId,
+  placeCategory: businessContacts.placeCategory,
+  placeRating: businessContacts.placeRating,
+  placeReviewsCount: businessContacts.placeReviewsCount,
+  placeOpeningHours: businessContacts.placeOpeningHours,
+  placeRawJson: businessContacts.placeRawJson,
 } as const;
 
 async function loadContacts(businessId: string) {
@@ -67,7 +82,7 @@ export async function POST(request: Request, context: RouteContext) {
         { status: 500 },
       );
     }
-    if (!isB2bLeadsConfigured()) {
+    if (!isB2bLeadsConfigured() || !isGooglePlacesCrawlerConfigured()) {
       return NextResponse.json(
         { error: "APIFY_API_TOKEN is not configured" },
         { status: 503 },
@@ -125,23 +140,46 @@ export async function POST(request: Request, context: RouteContext) {
 
     const company = toCompanyQuery(business.title);
 
-    let leads: B2BLead[];
-    try {
-      leads = await findCompanyContacts({
+    const [contactsResult, placeResult] = await Promise.allSettled([
+      findCompanyContacts({
         company,
         jobTitles: parsed.data.jobTitles,
         maxLeads: parsed.data.maxLeads ?? 10,
         maxTotalChargeUsd: MAX_CHARGE_USD,
-      });
-    } catch (error) {
+      }),
+      findPlaceDetails({
+        businessName: business.title,
+        maxTotalChargeUsd: MAX_CHARGE_USD,
+      }),
+    ]);
+
+    if (contactsResult.status === "rejected") {
       await db
         .update(searchBusinesses)
         .set({ contactsStatus: "error", contactsVerifiedAt: new Date() })
         .where(eq(searchBusinesses.id, id));
+      const reason = contactsResult.reason;
       const message =
-        error instanceof Error ? error.message : "Contact lookup failed";
+        reason instanceof Error ? reason.message : "Contact lookup failed";
       return NextResponse.json({ error: message }, { status: 502 });
     }
+
+    const leads: B2BLead[] = contactsResult.value;
+    const place: GooglePlaceResult | null =
+      placeResult.status === "fulfilled" ? placeResult.value : null;
+
+    const placeColumns = {
+      placeTitle: place?.title ?? null,
+      placeAddress: place?.address ?? null,
+      placePhone: place?.phone ?? null,
+      placeWebsite: place?.website ?? null,
+      placeId: place?.placeId ?? null,
+      placeCategory: place?.category ?? null,
+      placeRating: place?.rating ?? null,
+      placeReviewsCount: place?.reviewsCount ?? null,
+      placeOpeningHours: place?.openingHours ?? null,
+      placeRawJson: place?.raw ?? null,
+    };
 
     const verifiedAt = new Date();
 
@@ -164,8 +202,16 @@ export async function POST(request: Request, context: RouteContext) {
           source: lead.source,
           scrapedAt: lead.scrapedAt ? new Date(lead.scrapedAt) : null,
           rawJson: lead.raw,
+          ...placeColumns,
         })),
       );
+    } else if (place) {
+      await db.insert(businessContacts).values({
+        searchBusinessId: id,
+        name: business.title,
+        source: "google-places",
+        ...placeColumns,
+      });
     }
 
     await db
@@ -181,6 +227,7 @@ export async function POST(request: Request, context: RouteContext) {
       cached: false,
       query: company,
       found: leads.length,
+      place,
       contacts: await loadContacts(id),
     });
   } catch (error) {

@@ -293,11 +293,25 @@ export const businessContacts = pgTable(
     emailPattern: text("email_pattern"),
     phone: text("phone"),
     phoneSource: text("phone_source"),
-    /** "linkedin-serp" | "website-scrape" */
+    /** "linkedin-serp" | "website-scrape" | "google-places" */
     source: text("source"),
     scrapedAt: timestamp("scraped_at", { withTimezone: true }),
     /** The complete unmodified actor record for this contact. */
     rawJson: jsonb("raw_json"),
+    /** Place fields from the compass/crawler-google-places lookup, duplicated
+     * onto every contact row for this business (or a placeholder row when no
+     * contacts were found), so the place data is never dropped. */
+    placeTitle: text("place_title"),
+    placeAddress: text("place_address"),
+    placePhone: text("place_phone"),
+    placeWebsite: text("place_website"),
+    placeId: text("place_id"),
+    placeCategory: text("place_category"),
+    placeRating: real("place_rating"),
+    placeReviewsCount: integer("place_reviews_count"),
+    placeOpeningHours: jsonb("place_opening_hours"),
+    /** The complete unmodified compass/crawler-google-places record. */
+    placeRawJson: jsonb("place_raw_json"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

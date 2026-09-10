@@ -42,6 +42,16 @@ export async function GET(_request: Request, context: RouteContext) {
         source: businessContacts.source,
         scrapedAt: businessContacts.scrapedAt,
         rawJson: businessContacts.rawJson,
+        placeTitle: businessContacts.placeTitle,
+        placeAddress: businessContacts.placeAddress,
+        placePhone: businessContacts.placePhone,
+        placeWebsite: businessContacts.placeWebsite,
+        placeId: businessContacts.placeId,
+        placeCategory: businessContacts.placeCategory,
+        placeRating: businessContacts.placeRating,
+        placeReviewsCount: businessContacts.placeReviewsCount,
+        placeOpeningHours: businessContacts.placeOpeningHours,
+        placeRawJson: businessContacts.placeRawJson,
       })
       .from(businessContacts)
       .where(eq(businessContacts.searchBusinessId, id))

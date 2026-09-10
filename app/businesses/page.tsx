@@ -88,12 +88,35 @@ type BusinessContact = {
   source: string | null;
   scrapedAt: string | null;
   rawJson: unknown;
+  placeTitle: string | null;
+  placeAddress: string | null;
+  placePhone: string | null;
+  placeWebsite: string | null;
+  placeId: string | null;
+  placeCategory: string | null;
+  placeRating: number | null;
+  placeReviewsCount: number | null;
+  placeOpeningHours: unknown;
+  placeRawJson: unknown;
+};
+
+type GooglePlaceResult = {
+  title: string | null;
+  address: string | null;
+  phone: string | null;
+  website: string | null;
+  placeId: string | null;
+  category: string | null;
+  rating: number | null;
+  reviewsCount: number | null;
+  openingHours: unknown;
 };
 
 type VerifyContactsResponse = {
   cached?: boolean;
   query?: string;
   found: number;
+  place?: GooglePlaceResult | null;
   contacts: BusinessContact[];
   error?: string;
 };
@@ -116,6 +139,11 @@ type CheckWebsitesResponse = {
 
 const inputClass =
   "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
+
+/** Excludes the place-only placeholder row (source: "google-places") saved when no contact people were found. */
+function peopleContacts(contacts: BusinessContact[] | undefined): BusinessContact[] {
+  return (contacts ?? []).filter((contact) => contact.source !== "google-places");
+}
 
 export default function BusinessesPage() {
   const [industry, setIndustry] = useState("");
@@ -1291,14 +1319,73 @@ export default function BusinessesPage() {
               </span>
             </div>
 
+            {(() => {
+              const placeRow = contactsByBusiness[contactsModal.id]?.find(
+                (contact) => contact.placeTitle || contact.placeAddress,
+              );
+              if (!placeRow) return null;
+              return (
+                <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-950/40">
+                  <p className="font-semibold text-zinc-700 dark:text-zinc-200">
+                    Business info (Google Places)
+                  </p>
+                  <dl className="mt-1.5 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
+                    {placeRow.placeAddress ? (
+                      <>
+                        <dt className="text-zinc-400">Address</dt>
+                        <dd className="text-zinc-700 dark:text-zinc-300">
+                          {placeRow.placeAddress}
+                        </dd>
+                      </>
+                    ) : null}
+                    {placeRow.placeWebsite ? (
+                      <>
+                        <dt className="text-zinc-400">Website</dt>
+                        <dd>
+                          <a
+                            href={placeRow.placeWebsite}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="break-all text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                          >
+                            {placeRow.placeWebsite}
+                          </a>
+                        </dd>
+                      </>
+                    ) : null}
+                    {placeRow.placeCategory ? (
+                      <>
+                        <dt className="text-zinc-400">Category</dt>
+                        <dd className="text-zinc-700 dark:text-zinc-300">
+                          {placeRow.placeCategory}
+                        </dd>
+                      </>
+                    ) : null}
+                    {placeRow.placeRating != null ? (
+                      <>
+                        <dt className="text-zinc-400">Rating</dt>
+                        <dd className="text-zinc-700 dark:text-zinc-300">
+                          {placeRow.placeRating}
+                          {placeRow.placeReviewsCount != null
+                            ? ` (${placeRow.placeReviewsCount} reviews)`
+                            : ""}
+                        </dd>
+                      </>
+                    ) : null}
+                  </dl>
+                </div>
+              );
+            })()}
+
             <div className="mt-4">
               {loadingContactsId === contactsModal.id ? (
                 <p className="text-sm text-zinc-500">Loading contacts…</p>
-              ) : (contactsByBusiness[contactsModal.id]?.length ?? 0) === 0 ? (
+              ) : (peopleContacts(contactsByBusiness[contactsModal.id]).length ??
+                  0) === 0 ? (
                 <p className="text-sm text-zinc-500">No contacts found.</p>
               ) : (
                 <ul className="flex flex-col gap-3">
-                  {contactsByBusiness[contactsModal.id]?.map((contact) => (
+                  {peopleContacts(contactsByBusiness[contactsModal.id]).map((contact) => (
                     <li
                       key={contact.id}
                       className="rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-800"
