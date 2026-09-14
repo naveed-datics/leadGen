@@ -183,6 +183,17 @@ type FindSocialsResponse = {
   error?: string;
 };
 
+type VerifyNoWebsiteResponse = {
+  complete: boolean;
+  resumeAfter?: string;
+  checked: number;
+  socialsUpdated: number;
+  websitesUpdated: number;
+  errors?: number;
+  remainingEstimate?: number;
+  error?: string;
+};
+
 type BusinessReview = {
   author: string | null;
   rating: number | null;
@@ -304,6 +315,17 @@ export default function BusinessesPage() {
   const [websiteCheckedTotal, setWebsiteCheckedTotal] = useState(0);
   const [websiteDownTotal, setWebsiteDownTotal] = useState(0);
   const [websiteStatus, setWebsiteStatus] = useState<string | null>(null);
+
+  const [verifyingNoWebsite, setVerifyingNoWebsite] = useState(false);
+  const [verifyNoWebsiteCheckedTotal, setVerifyNoWebsiteCheckedTotal] =
+    useState(0);
+  const [verifyNoWebsiteSocialsTotal, setVerifyNoWebsiteSocialsTotal] =
+    useState(0);
+  const [verifyNoWebsiteWebsitesTotal, setVerifyNoWebsiteWebsitesTotal] =
+    useState(0);
+  const [verifyNoWebsiteStatus, setVerifyNoWebsiteStatus] = useState<
+    string | null
+  >(null);
 
   const [editing, setEditing] = useState<BusinessRow | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({
@@ -725,6 +747,7 @@ export default function BusinessesPage() {
     setSocialsMovedTotal(0);
     setSocialsStatus("Scanning websites for Instagram/Facebook…");
     setWhatsappStatus(null);
+    setVerifyNoWebsiteStatus(null);
 
     let resumeAfter: string | undefined;
     let totalChecked = 0;
@@ -778,6 +801,76 @@ export default function BusinessesPage() {
     }
   }
 
+  async function verifyNoWebsiteSocials() {
+    setVerifyingNoWebsite(true);
+    setError(null);
+    setVerifyNoWebsiteCheckedTotal(0);
+    setVerifyNoWebsiteSocialsTotal(0);
+    setVerifyNoWebsiteWebsitesTotal(0);
+    setVerifyNoWebsiteStatus(
+      "Verifying Facebook/Instagram/website for businesses without a website…",
+    );
+    setSocialsStatus(null);
+    setWhatsappStatus(null);
+    setWebsiteStatus(null);
+
+    let resumeAfter: string | undefined;
+    let totalChecked = 0;
+    let totalSocials = 0;
+    let totalWebsites = 0;
+    let totalErrors = 0;
+
+    try {
+      for (;;) {
+        const res = await fetch("/api/businesses/verify-no-website", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(resumeAfter ? { resumeAfter } : {}),
+        });
+        const data = (await res.json()) as VerifyNoWebsiteResponse;
+        if (!res.ok) {
+          setError(data.error ?? "Verify Socials failed");
+          setVerifyNoWebsiteStatus(null);
+          return;
+        }
+
+        totalChecked += data.checked ?? 0;
+        totalSocials += data.socialsUpdated ?? 0;
+        totalWebsites += data.websitesUpdated ?? 0;
+        totalErrors += data.errors ?? 0;
+        setVerifyNoWebsiteCheckedTotal(totalChecked);
+        setVerifyNoWebsiteSocialsTotal(totalSocials);
+        setVerifyNoWebsiteWebsitesTotal(totalWebsites);
+
+        const remaining = data.remainingEstimate ?? 0;
+        if (data.complete) {
+          setVerifyNoWebsiteStatus(
+            totalChecked === 0
+              ? "No unverified businesses without a website."
+              : `Done. Checked ${totalChecked} — ${totalSocials} with socials, ${totalWebsites} websites found${totalErrors > 0 ? `, ${totalErrors} errors` : ""}.`,
+          );
+          await load();
+          return;
+        }
+
+        setVerifyNoWebsiteStatus(
+          `Checked ${totalChecked}… socials ${totalSocials}… websites ${totalWebsites}… ${remaining} remaining`,
+        );
+        resumeAfter = data.resumeAfter;
+        if (!resumeAfter) {
+          setError("Verify paused without a resume point. Try again.");
+          setVerifyNoWebsiteStatus(null);
+          return;
+        }
+      }
+    } catch {
+      setError("Network error while verifying socials");
+      setVerifyNoWebsiteStatus(null);
+    } finally {
+      setVerifyingNoWebsite(false);
+    }
+  }
+
   async function checkWebsites() {
     setCheckingWebsites(true);
     setError(null);
@@ -786,6 +879,7 @@ export default function BusinessesPage() {
     setWebsiteStatus("Checking websites…");
     setSocialsStatus(null);
     setWhatsappStatus(null);
+    setVerifyNoWebsiteStatus(null);
 
     let resumeAfter: string | undefined;
     let totalChecked = 0;
@@ -845,6 +939,7 @@ export default function BusinessesPage() {
     setWhatsappCheckedTotal(0);
     setWhatsappStatus("Starting WhatsApp check…");
     setSocialsStatus(null);
+    setVerifyNoWebsiteStatus(null);
 
     let resumeAfter: string | undefined;
     let totalChecked = 0;
@@ -910,7 +1005,11 @@ export default function BusinessesPage() {
             type="button"
             onClick={() => void findSocials()}
             disabled={
-              findingSocials || checkingWhatsapp || checkingWebsites || loading
+              findingSocials ||
+              checkingWhatsapp ||
+              checkingWebsites ||
+              verifyingNoWebsite ||
+              loading
             }
             className="rounded-xl border border-emerald-700 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-500 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
           >
@@ -920,9 +1019,30 @@ export default function BusinessesPage() {
           </button>
           <button
             type="button"
+            onClick={() => void verifyNoWebsiteSocials()}
+            disabled={
+              verifyingNoWebsite ||
+              findingSocials ||
+              checkingWhatsapp ||
+              checkingWebsites ||
+              loading
+            }
+            className="rounded-xl border border-sky-700 px-4 py-2.5 text-sm font-semibold text-sky-800 transition hover:bg-sky-50 disabled:opacity-60 dark:border-sky-500 dark:text-sky-300 dark:hover:bg-sky-950/40"
+            title="Run enrich verify for all businesses without a website"
+          >
+            {verifyingNoWebsite
+              ? `Verifying… (${verifyNoWebsiteSocialsTotal} socials / ${verifyNoWebsiteCheckedTotal})`
+              : "Find Social & Verify Data"}
+          </button>
+          <button
+            type="button"
             onClick={() => void checkWebsites()}
             disabled={
-              checkingWebsites || findingSocials || checkingWhatsapp || loading
+              checkingWebsites ||
+              findingSocials ||
+              checkingWhatsapp ||
+              verifyingNoWebsite ||
+              loading
             }
             className="rounded-xl border border-emerald-700 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-500 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
           >
@@ -934,7 +1054,11 @@ export default function BusinessesPage() {
             type="button"
             onClick={() => void checkWhatsappNoWebsite()}
             disabled={
-              checkingWhatsapp || findingSocials || checkingWebsites || loading
+              checkingWhatsapp ||
+              findingSocials ||
+              checkingWebsites ||
+              verifyingNoWebsite ||
+              loading
             }
             className="rounded-xl border border-emerald-700 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-500 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
           >
@@ -945,12 +1069,18 @@ export default function BusinessesPage() {
         </div>
       </header>
 
-      {(whatsappStatus || socialsStatus || websiteStatus) && (
+      {(whatsappStatus ||
+        socialsStatus ||
+        websiteStatus ||
+        verifyNoWebsiteStatus) && (
         <div
           role="status"
           className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100"
         >
-          {websiteStatus ?? socialsStatus ?? whatsappStatus}
+          {verifyNoWebsiteStatus ??
+            websiteStatus ??
+            socialsStatus ??
+            whatsappStatus}
         </div>
       )}
 

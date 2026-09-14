@@ -2,14 +2,12 @@ import { and, asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
-import { getDb } from "@/lib/db/index";
-import { businessContacts, leads, searchBusinesses, searches } from "@/lib/db/schema";
 import {
-  enrichBusiness,
-  hasUsableEnrichUrl,
-  parseUsAddress,
-} from "@/lib/integrations/find-facebook-page";
-import { mergeSocials, normalizeSocialUrl } from "@/lib/social-urls";
+  applyBusinessEnrichment,
+  markBusinessEnrichError,
+} from "@/lib/business-enrich";
+import { getDb } from "@/lib/db/index";
+import { businessContacts, searchBusinesses, searches } from "@/lib/db/schema";
 
 export const maxDuration = 300;
 
@@ -43,23 +41,6 @@ async function loadContacts(businessId: string) {
     .from(businessContacts)
     .where(eq(businessContacts.searchBusinessId, businessId))
     .orderBy(asc(businessContacts.createdAt));
-}
-
-function pickOverallConfidence(
-  facebookConfidence: string,
-  instagramConfidence: string,
-  websiteConfidence: string,
-): string {
-  const rank: Record<string, number> = {
-    high: 4,
-    medium: 3,
-    low: 2,
-    none: 1,
-  };
-  const best = [facebookConfidence, instagramConfidence, websiteConfidence].sort(
-    (a, b) => (rank[b] ?? 0) - (rank[a] ?? 0),
-  )[0];
-  return best ?? "none";
 }
 
 export async function POST(request: Request, context: RouteContext) {
@@ -135,145 +116,22 @@ export async function POST(request: Request, context: RouteContext) {
       });
     }
 
-    const parsedAddress = parseUsAddress(business.address);
-
-    let enrichment;
+    let result;
     try {
-      enrichment = await enrichBusiness({
-        business_name: business.title,
-        phone: business.phone,
-        address: parsedAddress.address,
-        city: parsedAddress.city,
-        state: parsedAddress.state,
-        zip_code: parsedAddress.zip_code,
-      });
+      result = await applyBusinessEnrichment(business);
     } catch (error) {
-      await db
-        .update(searchBusinesses)
-        .set({ contactsStatus: "error", contactsVerifiedAt: new Date() })
-        .where(eq(searchBusinesses.id, id));
+      await markBusinessEnrichError(id);
       const message =
         error instanceof Error ? error.message : "Verification lookup failed";
       return NextResponse.json({ error: message }, { status: 502 });
     }
 
-    const facebookUrl = hasUsableEnrichUrl(enrichment.facebook)
-      ? normalizeSocialUrl(enrichment.facebook.url!)
-      : null;
-    const instagramUrl = hasUsableEnrichUrl(enrichment.instagram)
-      ? normalizeSocialUrl(enrichment.instagram.url!)
-      : null;
-    const websiteUrl = hasUsableEnrichUrl(enrichment.website)
-      ? enrichment.website.url!.trim()
-      : null;
-
-    const matchConfidence = pickOverallConfidence(
-      facebookUrl ? enrichment.facebook.match_confidence : "none",
-      instagramUrl ? enrichment.instagram.match_confidence : "none",
-      websiteUrl ? enrichment.website.match_confidence : "none",
-    );
-
-    const matchNotes = [
-      enrichment.notes,
-      enrichment.facebook.reasoning
-        ? `Facebook: ${enrichment.facebook.reasoning}`
-        : null,
-      enrichment.instagram.reasoning
-        ? `Instagram: ${enrichment.instagram.reasoning}`
-        : null,
-      enrichment.website.reasoning
-        ? `Website: ${enrichment.website.reasoning}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(" | ");
-
-    const foundCount =
-      (facebookUrl ? 1 : 0) + (instagramUrl ? 1 : 0) + (websiteUrl ? 1 : 0);
-
-    const verifiedAt = new Date();
-
-    await db
-      .delete(businessContacts)
-      .where(eq(businessContacts.searchBusinessId, id));
-
-    await db.insert(businessContacts).values({
-      searchBusinessId: id,
-      name: business.title,
-      source: "find-facebook-page",
-      facebookUrl,
-      instagramUrl,
-      reviewsJson: [],
-      photoUrls: [],
-      matchConfidence,
-      matchNotes: matchNotes || null,
-      tavilyRawJson: enrichment,
-    });
-
-    const businessPatch: {
-      contactsVerifiedAt: Date;
-      contactsFound: number;
-      contactsStatus: string;
-      website?: string;
-      hasWebsite?: boolean;
-    } = {
-      contactsVerifiedAt: verifiedAt,
-      contactsFound: foundCount,
-      contactsStatus: foundCount > 0 ? "ok" : "none",
-    };
-
-    if (websiteUrl) {
-      businessPatch.website = websiteUrl;
-      businessPatch.hasWebsite = true;
-    }
-
-    await db
-      .update(searchBusinesses)
-      .set(businessPatch)
-      .where(eq(searchBusinesses.id, id));
-
-    const socialUrls = [facebookUrl, instagramUrl].filter(
-      (url): url is string => Boolean(url),
-    );
-
-    if (socialUrls.length > 0) {
-      const [existingLead] = await db
-        .select({ id: leads.id, socials: leads.socials })
-        .from(leads)
-        .where(eq(leads.searchBusinessId, id))
-        .limit(1);
-
-      if (existingLead) {
-        await db
-          .update(leads)
-          .set({ socials: mergeSocials(existingLead.socials, socialUrls) })
-          .where(eq(leads.id, existingLead.id));
-      } else {
-        await db.insert(leads).values({
-          searchId: business.searchId,
-          searchBusinessId: id,
-          title: business.title,
-          placeId: business.placeId,
-          address: business.address,
-          phone: business.phone,
-          rating: business.rating,
-          reviews: business.reviews,
-          type: business.type,
-          mapsUrl: business.mapsUrl,
-          thumbnail: business.thumbnail,
-          latitude: business.latitude,
-          longitude: business.longitude,
-          socials: mergeSocials(null, socialUrls),
-        });
-      }
-    }
-
     return NextResponse.json({
       cached: false,
-      enrichment,
-      found: foundCount,
-      websiteUpdated: Boolean(websiteUrl),
-      socialsUpdated: socialUrls.length > 0,
+      enrichment: result.enrichment,
+      found: result.foundCount,
+      websiteUpdated: result.websiteUpdated,
+      socialsUpdated: result.socialsUpdated,
       contacts: await loadContacts(id),
     });
   } catch (error) {
