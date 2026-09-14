@@ -3,6 +3,99 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+type ActionIconVariant = "view" | "search" | "edit" | "delete" | "verify";
+
+function ActionIcon({ variant }: { variant: ActionIconVariant }) {
+  const iconProps = {
+    width: 16,
+    height: 16,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+    "aria-hidden": true,
+  } as const;
+
+  switch (variant) {
+    case "view":
+      return (
+        <svg {...iconProps}>
+          <path
+            d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <circle cx="12" cy="12" r="2.75" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg {...iconProps}>
+          <path
+            d="M10.5 18.5a8 8 0 1 1 0-16a8 8 0 0 1 0 16Z"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
+          <path
+            d="M16.2 16.2L21 21"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "edit":
+      return (
+        <svg {...iconProps}>
+          <path
+            d="M4 20h4L18.5 9.5a2.5 2.5 0 0 0-4-4L4 16v4Z"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M13.5 6.5l4 4"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "delete":
+      return (
+        <svg {...iconProps}>
+          <path
+            d="M5 7h14M10 3.5h4M9.5 7v11m5-11v11M6.5 7l.7 12A2 2 0 0 0 9.2 20.5h5.6a2 2 0 0 0 2-1.9L18.5 7"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "verify":
+      return (
+        <svg {...iconProps}>
+          <path
+            d="M12 3.5l7 3v5c0 4.5-3 7.5-7 8.5-4-1-7-4-7-8.5v-5l7-3Z"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M9 12.3l2 2 4-4.3"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 type BusinessRow = {
   id: string;
   title: string;
@@ -31,6 +124,7 @@ type BusinessRow = {
 };
 
 type WhatsappFilter = "any" | "true" | "false" | "unchecked";
+type SocialsFilter = "any" | "true" | "false";
 
 type WebsiteStateFilter =
   | "any"
@@ -51,6 +145,8 @@ const COPYRIGHT_MAX_YEAR: Partial<Record<WebsiteStateFilter, number>> = {
   copyright_2020: 2020,
 };
 
+const PAGE_SIZE = 50;
+
 type IndustryOption = {
   id: string;
   name: string;
@@ -66,6 +162,7 @@ type EditForm = {
   email: string;
   website: string;
   address: string;
+  socials: string;
 };
 
 type CheckNoWebsiteResponse = {
@@ -86,48 +183,35 @@ type FindSocialsResponse = {
   error?: string;
 };
 
-type BusinessContact = {
-  id: string;
-  name: string;
-  jobTitle: string | null;
-  linkedinUrl: string | null;
-  email: string | null;
-  emailConfidence: string | null;
-  emailPattern: string | null;
-  phone: string | null;
-  phoneSource: string | null;
+type BusinessReview = {
+  author: string | null;
+  rating: number | null;
+  text: string | null;
   source: string | null;
-  scrapedAt: string | null;
-  rawJson: unknown;
-  placeTitle: string | null;
-  placeAddress: string | null;
-  placePhone: string | null;
-  placeWebsite: string | null;
-  placeId: string | null;
-  placeCategory: string | null;
-  placeRating: number | null;
-  placeReviewsCount: number | null;
-  placeOpeningHours: unknown;
-  placeRawJson: unknown;
 };
 
-type GooglePlaceResult = {
-  title: string | null;
-  address: string | null;
-  phone: string | null;
-  website: string | null;
-  placeId: string | null;
-  category: string | null;
-  rating: number | null;
-  reviewsCount: number | null;
-  openingHours: unknown;
+type BusinessContact = {
+  id: string;
+  source: string | null;
+  facebookUrl: string | null;
+  instagramUrl: string | null;
+  reviewsJson: BusinessReview[] | null;
+  photoUrls: string[] | null;
+  matchConfidence: string | null;
+  matchNotes: string | null;
+  tavilyRawJson: unknown;
 };
 
 type VerifyContactsResponse = {
   cached?: boolean;
-  query?: string;
   found: number;
-  place?: GooglePlaceResult | null;
+  websiteUpdated?: boolean;
+  socialsUpdated?: boolean;
+  enrichment?: {
+    facebook?: { url: string | null };
+    instagram?: { url: string | null };
+    website?: { url: string | null };
+  };
   contacts: BusinessContact[];
   error?: string;
 };
@@ -150,11 +234,6 @@ type CheckWebsitesResponse = {
 
 const inputClass =
   "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
-
-/** Excludes the place-only placeholder row (source: "google-places") saved when no contact people were found. */
-function peopleContacts(contacts: BusinessContact[] | undefined): BusinessContact[] {
-  return (contacts ?? []).filter((contact) => contact.source !== "google-places");
-}
 
 function WhatsappIcon({ className }: { className?: string }) {
   return (
@@ -188,6 +267,7 @@ export default function BusinessesPage() {
   const [website, setWebsite] = useState("");
   const [phone, setPhone] = useState("");
   const [hasWhatsapp, setHasWhatsapp] = useState<WhatsappFilter>("any");
+  const [hasSocials, setHasSocials] = useState<SocialsFilter>("any");
   const [websiteStateFilter, setWebsiteStateFilter] =
     useState<WebsiteStateFilter>("any");
   const [location, setLocation] = useState("");
@@ -199,12 +279,14 @@ export default function BusinessesPage() {
     website: "",
     phone: "",
     hasWhatsapp: "any" as WhatsappFilter,
+    hasSocials: "any" as SocialsFilter,
     websiteState: "any" as WebsiteStateFilter,
     location: "",
   });
 
   const [items, setItems] = useState<BusinessRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -230,6 +312,7 @@ export default function BusinessesPage() {
     email: "",
     website: "",
     address: "",
+    socials: "",
   });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -249,6 +332,7 @@ export default function BusinessesPage() {
     if (applied.website.trim()) params.set("website", applied.website.trim());
     if (applied.phone.trim()) params.set("phone", applied.phone.trim());
     if (applied.hasWhatsapp !== "any") params.set("hasWhatsapp", applied.hasWhatsapp);
+    if (applied.hasSocials !== "any") params.set("hasSocials", applied.hasSocials);
     if (applied.websiteState !== "any") {
       const copyrightMaxYear = COPYRIGHT_MAX_YEAR[applied.websiteState];
       if (copyrightMaxYear != null) {
@@ -258,9 +342,20 @@ export default function BusinessesPage() {
       }
     }
     if (applied.location.trim()) params.set("location", applied.location.trim());
-    params.set("limit", "200");
+    params.set("limit", String(PAGE_SIZE));
+    params.set("offset", String(page * PAGE_SIZE));
     return params.toString();
-  }, [applied]);
+  }, [applied, page]);
+
+  const hasActiveFilters =
+    applied.industry.trim() !== "" ||
+    applied.hasWebsite !== "any" ||
+    applied.website.trim() !== "" ||
+    applied.phone.trim() !== "" ||
+    applied.hasWhatsapp !== "any" ||
+    applied.hasSocials !== "any" ||
+    applied.websiteState !== "any" ||
+    applied.location.trim() !== "";
 
   useEffect(() => {
     let cancelled = false;
@@ -314,12 +409,14 @@ export default function BusinessesPage() {
 
   function applyFilters(e: React.FormEvent) {
     e.preventDefault();
+    setPage(0);
     setApplied({
       industry,
       hasWebsite,
       website,
       phone,
       hasWhatsapp,
+      hasSocials,
       websiteState: websiteStateFilter,
       location,
     });
@@ -331,14 +428,17 @@ export default function BusinessesPage() {
     setWebsite("");
     setPhone("");
     setHasWhatsapp("any");
+    setHasSocials("any");
     setWebsiteStateFilter("any");
     setLocation("");
+    setPage(0);
     setApplied({
       industry: "",
       hasWebsite: "any",
       website: "",
       phone: "",
       hasWhatsapp: "any",
+      hasSocials: "any",
       websiteState: "any",
       location: "",
     });
@@ -384,6 +484,7 @@ export default function BusinessesPage() {
       email: row.email ?? "",
       website: row.website ?? "",
       address: row.address ?? "",
+      socials: row.socials ?? "",
     });
     setError(null);
   }
@@ -413,6 +514,7 @@ export default function BusinessesPage() {
           email: editForm.email.trim() || null,
           website: editForm.website.trim() || null,
           address: editForm.address.trim() || null,
+          socials: editForm.socials.trim() || null,
         }),
       });
       const data = (await res.json()) as {
@@ -424,6 +526,7 @@ export default function BusinessesPage() {
           website: string | null;
           hasWebsite: boolean;
           address: string | null;
+          socials: string | null;
         };
         error?: string;
       };
@@ -433,20 +536,23 @@ export default function BusinessesPage() {
       }
 
       const nextAddress = data.business.address;
+      const nextSocials = data.business.socials ?? null;
+      const patched = {
+        title: data.business.title,
+        phone: data.business.phone,
+        email: data.business.email,
+        website: data.business.website,
+        hasWebsite: data.business.hasWebsite,
+        address: nextAddress,
+        socials: nextSocials,
+      };
       setItems((prev) =>
         prev.map((item) =>
-          item.id === editing.id
-            ? {
-                ...item,
-                title: data.business!.title,
-                phone: data.business!.phone,
-                email: data.business!.email,
-                website: data.business!.website,
-                hasWebsite: data.business!.hasWebsite,
-                address: nextAddress,
-              }
-            : item,
+          item.id === editing.id ? { ...item, ...patched } : item,
         ),
+      );
+      setContactsModal((prev) =>
+        prev?.id === editing.id ? { ...prev, ...patched } : prev,
       );
       setEditing(null);
     } catch {
@@ -514,11 +620,37 @@ export default function BusinessesPage() {
       }
 
       const result = data as VerifyContactsResponse;
+      const facebookUrl = result.contacts
+        .map((c) => c.facebookUrl)
+        .find((u) => Boolean(u));
+      const instagramUrl = result.contacts
+        .map((c) => c.instagramUrl)
+        .find((u) => Boolean(u));
+      const socialUrls = [facebookUrl, instagramUrl].filter(
+        (u): u is string => Boolean(u),
+      );
+      const websiteFromEnrich =
+        result.enrichment?.website?.url?.trim() || null;
+
       const nextRow: BusinessRow = {
         ...row,
         contactsFound: result.found,
         contactsStatus: result.found > 0 ? "ok" : "none",
         contactsVerifiedAt: new Date().toISOString(),
+        ...(websiteFromEnrich
+          ? { website: websiteFromEnrich, hasWebsite: true }
+          : {}),
+        ...(socialUrls.length > 0
+          ? {
+              socials: [
+                ...new Set(
+                  [...(row.socials?.split(",") ?? []), ...socialUrls]
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                ),
+              ].join(","),
+            }
+          : {}),
       };
       setContactsByBusiness((prev) => ({
         ...prev,
@@ -810,20 +942,6 @@ export default function BusinessesPage() {
               ? `Checking… (${whatsappCheckedTotal})`
               : "Check WhatsApp (no website)"}
           </button>
-          <button
-            type="button"
-            onClick={() => void exportCsv()}
-            disabled={
-              exporting ||
-              loading ||
-              checkingWhatsapp ||
-              findingSocials ||
-              checkingWebsites
-            }
-            className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-60"
-          >
-            {exporting ? "Exporting…" : "Export CSV"}
-          </button>
         </div>
       </header>
 
@@ -915,6 +1033,22 @@ export default function BusinessesPage() {
           </label>
           <label className="block">
             <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              Have socials
+            </span>
+            <select
+              value={hasSocials}
+              onChange={(e) =>
+                setHasSocials(e.target.value as SocialsFilter)
+              }
+              className={`mt-1.5 ${inputClass}`}
+            >
+              <option value="any">Any</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
               Website status
             </span>
             <select
@@ -974,25 +1108,42 @@ export default function BusinessesPage() {
         </div>
       )}
 
-      <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-        {loading ? "Loading…" : `${total} business${total === 1 ? "" : "es"}`}
-        {!loading && items.length < total
-          ? ` (showing ${items.length})`
-          : null}
-      </p>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          {loading ? "Loading…" : `${total} business${total === 1 ? "" : "es"}`}
+          {!loading && items.length < total
+            ? ` (showing ${items.length})`
+            : null}
+        </p>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={() => void exportCsv()}
+            disabled={
+              exporting ||
+              loading ||
+              checkingWhatsapp ||
+              findingSocials ||
+              checkingWebsites
+            }
+            className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-60"
+          >
+            {exporting ? "Exporting…" : "Export CSV"}
+          </button>
+        )}
+      </div>
 
       <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <table className="w-full table-fixed text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/60">
             <tr>
-              <th className="w-[20%] px-3 py-3 font-medium">Business</th>
-              <th className="w-[11%] px-3 py-3 font-medium">Industry</th>
-              <th className="w-[11%] px-3 py-3 font-medium">Location</th>
-              <th className="w-[15%] px-3 py-3 font-medium">Social media</th>
-              <th className="w-[13%] px-3 py-3 font-medium">Phone</th>
-              <th className="w-[10%] px-3 py-3 font-medium">Website</th>
-              <th className="w-[6%] px-3 py-3 font-medium">Search</th>
-              <th className="w-[14%] px-3 py-3 font-medium">Actions</th>
+              <th className="w-[18%] px-3 py-3 font-medium">Business</th>
+              <th className="w-[10%] px-3 py-3 font-medium">Industry</th>
+              <th className="w-[10%] px-3 py-3 font-medium">Location</th>
+              <th className="w-[13%] px-3 py-3 font-medium">Social media</th>
+              <th className="w-[11%] px-3 py-3 font-medium">Phone</th>
+              <th className="w-[26%] px-3 py-3 font-medium">Website</th>
+              <th className="w-[12%] px-3 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1072,12 +1223,6 @@ export default function BusinessesPage() {
                   </td>
                   <td className="px-3 py-3 align-top">
                     <div className="flex items-center gap-1.5">
-                      <span
-                        className="truncate text-zinc-700 dark:text-zinc-300"
-                        title={row.phone ?? undefined}
-                      >
-                        {row.phone ?? "—"}
-                      </span>
                       {row.phone ? (
                         row.hasWhatsapp ? (
                           <a
@@ -1099,6 +1244,12 @@ export default function BusinessesPage() {
                           </a>
                         )
                       ) : null}
+                      <span
+                        className="truncate text-zinc-700 dark:text-zinc-300"
+                        title={row.phone ?? undefined}
+                      >
+                        {row.phone ?? "—"}
+                      </span>
                     </div>
                   </td>
                   <td className="px-3 py-3 align-top">
@@ -1142,61 +1293,56 @@ export default function BusinessesPage() {
                     )}
                   </td>
                   <td className="px-3 py-3 align-top">
-                    <Link
-                      href={`/searches/${row.searchId}`}
-                      className="text-xs font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-                    >
-                      Open
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3 align-top">
-                    <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap">
+                    <div className="flex flex-wrap items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => void verifyContacts(row)}
-                        disabled={verifyingId === row.id}
-                        className="rounded-lg border border-sky-300 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                        onClick={() => void openContacts(row)}
+                        title="View detail"
+                        aria-label="View detail"
+                        className="rounded-lg border border-sky-300 p-1.5 text-sky-700 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40"
                       >
-                        {verifyingId === row.id
-                          ? "Verifying…"
-                          : row.contactsVerifiedAt
-                            ? "Re-verify"
-                            : "Verify"}
+                        <ActionIcon variant="view" />
                       </button>
+                      <Link
+                        href={`/searches/${row.searchId}`}
+                        title="Open search"
+                        aria-label="Open search"
+                        className="rounded-lg border border-emerald-300 p-1.5 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                      >
+                        <ActionIcon variant="search" />
+                      </Link>
+                      {!row.contactsVerifiedAt && (
+                        <button
+                          type="button"
+                          onClick={() => void verifyContacts(row)}
+                          disabled={verifyingId === row.id}
+                          title="Verify"
+                          aria-label="Verify"
+                          className="rounded-lg border border-indigo-300 p-1.5 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/40"
+                        >
+                          <ActionIcon variant="verify" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => openEdit(row)}
-                        className="rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                        title="Edit"
+                        aria-label="Edit"
+                        className="rounded-lg border border-zinc-300 p-1.5 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
                       >
-                        Edit
+                        <ActionIcon variant="edit" />
                       </button>
                       <button
                         type="button"
                         onClick={() => setDeleteTarget(row)}
                         disabled={deletingId === row.id}
-                        className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60 dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/40"
+                        title="Delete"
+                        aria-label="Delete"
+                        className="rounded-lg border border-red-200 p-1.5 text-red-700 hover:bg-red-50 disabled:opacity-60 dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/40"
                       >
-                        Delete
+                        <ActionIcon variant="delete" />
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void openContacts(row)}
-                      className="mt-1.5 text-xs font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
-                    >
-                      View Detail
-                    </button>
-                    {row.contactsVerifiedAt && verifyingId !== row.id ? (
-                      row.contactsStatus === "error" ? (
-                        <p className="mt-1 text-xs text-zinc-400">
-                          Contact lookup failed
-                        </p>
-                      ) : row.contactsStatus === "none" ? (
-                        <p className="mt-1 text-xs text-zinc-400">
-                          No contacts found
-                        </p>
-                      ) : null
-                    ) : null}
                   </td>
                 </tr>
               ))
@@ -1204,6 +1350,32 @@ export default function BusinessesPage() {
           </tbody>
         </table>
       </div>
+
+      {!loading && total > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Page {page + 1} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0 || loading}
+              className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={(page + 1) * PAGE_SIZE >= total || loading}
+              className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <div
@@ -1214,7 +1386,7 @@ export default function BusinessesPage() {
         >
           <form
             onSubmit={(e) => void saveEdit(e)}
-            className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
           >
             <h2
               id="edit-business-title"
@@ -1285,6 +1457,23 @@ export default function BusinessesPage() {
                   }
                   className={`mt-1.5 ${inputClass}`}
                 />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  Socials
+                </span>
+                <textarea
+                  value={editForm.socials}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, socials: e.target.value }))
+                  }
+                  rows={2}
+                  placeholder="https://instagram.com/…, https://facebook.com/…"
+                  className={`mt-1.5 ${inputClass}`}
+                />
+                <span className="mt-1 block text-xs text-zinc-500">
+                  Comma-separated Instagram, Facebook, or other profile URLs.
+                </span>
               </label>
             </div>
             <div className="mt-5 flex justify-end gap-2">
@@ -1390,12 +1579,27 @@ export default function BusinessesPage() {
                 disabled={verifyingId === contactsModal.id}
                 className="rounded-lg border border-sky-300 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40"
               >
-                {verifyingId === contactsModal.id ? "Re-verifying…" : "Re-verify"}
+                {verifyingId === contactsModal.id
+                  ? "Verifying…"
+                  : contactsModal.contactsVerifiedAt
+                    ? "Re-verify"
+                    : "Verify"}
               </button>
               <span className="text-xs text-zinc-400">
-                Source: B2B Leads Finder (searched by company name; results may
-                span franchises — match against the address above).
+                Source: find-facebook-page enrich (Facebook, Instagram,
+                website). When found, socials and website fields are updated.
               </span>
+              {contactsModal.contactsVerifiedAt && verifyingId !== contactsModal.id ? (
+                contactsModal.contactsStatus === "error" ? (
+                  <span className="text-xs text-red-500">
+                    Last lookup failed — try re-verifying.
+                  </span>
+                ) : contactsModal.contactsStatus === "none" ? (
+                  <span className="text-xs text-zinc-400">
+                    No contacts found on last verify.
+                  </span>
+                ) : null
+              ) : null}
             </div>
 
             <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-950/40">
@@ -1509,178 +1713,164 @@ export default function BusinessesPage() {
               </dl>
             </div>
 
-            {(() => {
-              const placeRow = contactsByBusiness[contactsModal.id]?.find(
-                (contact) => contact.placeTitle || contact.placeAddress,
-              );
-              if (!placeRow) return null;
-              return (
-                <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-950/40">
-                  <p className="font-semibold text-zinc-700 dark:text-zinc-200">
-                    Business info (Google Places)
-                  </p>
-                  <dl className="mt-1.5 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
-                    {placeRow.placeAddress ? (
-                      <>
-                        <dt className="text-zinc-400">Address</dt>
-                        <dd className="text-zinc-700 dark:text-zinc-300">
-                          {placeRow.placeAddress}
-                        </dd>
-                      </>
-                    ) : null}
-                    {placeRow.placeWebsite ? (
-                      <>
-                        <dt className="text-zinc-400">Website</dt>
-                        <dd>
-                          <a
-                            href={placeRow.placeWebsite}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="break-all text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
-                          >
-                            {placeRow.placeWebsite}
-                          </a>
-                        </dd>
-                      </>
-                    ) : null}
-                    {placeRow.placeCategory ? (
-                      <>
-                        <dt className="text-zinc-400">Category</dt>
-                        <dd className="text-zinc-700 dark:text-zinc-300">
-                          {placeRow.placeCategory}
-                        </dd>
-                      </>
-                    ) : null}
-                    {placeRow.placeRating != null ? (
-                      <>
-                        <dt className="text-zinc-400">Rating</dt>
-                        <dd className="text-zinc-700 dark:text-zinc-300">
-                          {placeRow.placeRating}
-                          {placeRow.placeReviewsCount != null
-                            ? ` (${placeRow.placeReviewsCount} reviews)`
-                            : ""}
-                        </dd>
-                      </>
-                    ) : null}
-                  </dl>
-                </div>
-              );
-            })()}
-
             <div className="mt-4">
               {loadingContactsId === contactsModal.id ? (
                 <p className="text-sm text-zinc-500">Loading contacts…</p>
-              ) : (peopleContacts(contactsByBusiness[contactsModal.id]).length ??
-                  0) === 0 ? (
-                <p className="text-sm text-zinc-500">No contacts found.</p>
+              ) : (contactsByBusiness[contactsModal.id]?.length ?? 0) === 0 ? (
+                <p className="text-sm text-zinc-500">No results yet — click Verify.</p>
               ) : (
-                <ul className="flex flex-col gap-3">
-                  {peopleContacts(contactsByBusiness[contactsModal.id]).map((contact) => (
-                    <li
-                      key={contact.id}
-                      className="rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-800"
-                    >
-                      <div className="flex flex-wrap items-baseline gap-x-2">
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-                          {contact.name}
-                        </span>
-                        {contact.jobTitle ? (
-                          <span className="text-xs text-zinc-500">
-                            {contact.jobTitle}
+                (() => {
+                  const result = contactsByBusiness[contactsModal.id]?.[0];
+                  if (!result) return null;
+                  const reviews = result.reviewsJson ?? [];
+                  const photos = result.photoUrls ?? [];
+                  const hasAnything =
+                    result.facebookUrl || result.instagramUrl || reviews.length > 0 || photos.length > 0;
+                  return (
+                    <div className="rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-zinc-900 dark:text-zinc-50">
+                          Social &amp; reviews
+                        </p>
+                        {result.matchConfidence &&
+                        result.matchConfidence !== "none" ? (
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                              result.matchConfidence === "high"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                                : "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                            }`}
+                          >
+                            {result.matchConfidence} confidence match
                           </span>
                         ) : null}
                       </div>
+                      {result.matchNotes ? (
+                        <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                          {result.matchNotes}
+                        </p>
+                      ) : null}
 
-                      <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-xs">
-                        {contact.email ? (
-                          <>
-                            <dt className="text-zinc-400">Email</dt>
-                            <dd className="flex flex-wrap items-center gap-1.5">
-                              <a
-                                href={`mailto:${contact.email}`}
-                                className="text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-                              >
-                                {contact.email}
-                              </a>
-                              {contact.emailConfidence ? (
-                                <span
-                                  className={`rounded px-1 py-0.5 text-[10px] font-semibold uppercase ${
-                                    contact.emailConfidence === "found"
-                                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
-                                      : contact.emailConfidence ===
-                                          "pattern_matched"
-                                        ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
-                                        : "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
-                                  }`}
-                                >
-                                  {contact.emailConfidence.replace("_", " ")}
-                                </span>
-                              ) : null}
-                              {contact.emailPattern ? (
-                                <span className="text-zinc-400">
-                                  ({contact.emailPattern})
-                                </span>
-                              ) : null}
-                            </dd>
-                          </>
-                        ) : null}
-                        {contact.phone ? (
-                          <>
-                            <dt className="text-zinc-400">Phone</dt>
-                            <dd className="text-zinc-700 dark:text-zinc-300">
-                              {contact.phone}
-                              {contact.phoneSource
-                                ? ` · ${contact.phoneSource}`
-                                : ""}
-                            </dd>
-                          </>
-                        ) : null}
-                        {contact.linkedinUrl ? (
-                          <>
-                            <dt className="text-zinc-400">LinkedIn</dt>
-                            <dd>
-                              <a
-                                href={contact.linkedinUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="break-all text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
-                              >
-                                {contact.linkedinUrl}
-                              </a>
-                            </dd>
-                          </>
-                        ) : null}
-                        {contact.source ? (
-                          <>
-                            <dt className="text-zinc-400">Source</dt>
-                            <dd className="text-zinc-700 dark:text-zinc-300">
-                              {contact.source}
-                            </dd>
-                          </>
-                        ) : null}
-                        {contact.scrapedAt ? (
-                          <>
-                            <dt className="text-zinc-400">Scraped</dt>
-                            <dd className="text-zinc-700 dark:text-zinc-300">
-                              {new Date(contact.scrapedAt).toLocaleString()}
-                            </dd>
-                          </>
-                        ) : null}
-                      </dl>
+                      {!hasAnything ? (
+                        <p className="mt-2 text-sm text-zinc-500">
+                          No Facebook, Instagram, reviews, or photos found.
+                        </p>
+                      ) : (
+                        <>
+                          <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-xs">
+                            {result.facebookUrl ? (
+                              <>
+                                <dt className="text-zinc-400">Facebook</dt>
+                                <dd>
+                                  <a
+                                    href={result.facebookUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="break-all text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                                  >
+                                    {result.facebookUrl}
+                                  </a>
+                                </dd>
+                              </>
+                            ) : null}
+                            {result.instagramUrl ? (
+                              <>
+                                <dt className="text-zinc-400">Instagram</dt>
+                                <dd>
+                                  <a
+                                    href={result.instagramUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="break-all text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                                  >
+                                    {result.instagramUrl}
+                                  </a>
+                                </dd>
+                              </>
+                            ) : null}
+                          </dl>
 
-                      {contact.rawJson ? (
-                        <details className="mt-2">
+                          {reviews.length > 0 ? (
+                            <div className="mt-3">
+                              <p className="text-xs font-semibold text-zinc-500">
+                                Reviews
+                              </p>
+                              <ul className="mt-1.5 flex flex-col gap-2">
+                                {reviews.map((review, index) => (
+                                  <li
+                                    key={index}
+                                    className="rounded-lg bg-zinc-50 p-2 text-xs dark:bg-zinc-950/40"
+                                  >
+                                    <div className="flex flex-wrap items-baseline gap-x-2">
+                                      {review.author ? (
+                                        <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                                          {review.author}
+                                        </span>
+                                      ) : null}
+                                      {review.rating != null ? (
+                                        <span className="text-zinc-400">
+                                          {review.rating}★
+                                        </span>
+                                      ) : null}
+                                      {review.source ? (
+                                        <span className="text-zinc-400">
+                                          · {review.source}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    {review.text ? (
+                                      <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+                                        {review.text}
+                                      </p>
+                                    ) : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+
+                          {photos.length > 0 ? (
+                            <div className="mt-3">
+                              <p className="text-xs font-semibold text-zinc-500">
+                                Photos
+                              </p>
+                              <div className="mt-1.5 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                                {photos.map((url) => (
+                                  <a
+                                    key={url}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="block overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800"
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={url}
+                                      alt=""
+                                      className="aspect-square w-full object-cover"
+                                      loading="lazy"
+                                    />
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </>
+                      )}
+
+                      {result.tavilyRawJson ? (
+                        <details className="mt-3">
                           <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
                             Raw response
                           </summary>
                           <pre className="mt-1 max-h-64 overflow-auto rounded-lg bg-zinc-100 p-2 text-[11px] leading-relaxed text-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
-                            {JSON.stringify(contact.rawJson, null, 2)}
+                            {JSON.stringify(result.tavilyRawJson, null, 2)}
                           </pre>
                         </details>
                       ) : null}
-                    </li>
-                  ))}
-                </ul>
+                    </div>
+                  );
+                })()
               )}
             </div>
           </div>

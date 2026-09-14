@@ -15,6 +15,7 @@ type AgentSettings = {
   whatsAppEnabled: boolean;
   serpApiKeyConfigured: boolean;
   googlePlacesApiKeyConfigured: boolean;
+  tavilyApiKeyConfigured: boolean;
   searchDataSource: SearchDataSource;
   waConfigured: boolean;
 };
@@ -27,6 +28,7 @@ export default function AgentSettingsPage() {
 
   const [serpApiKey, setSerpApiKey] = useState("");
   const [googlePlacesApiKey, setGooglePlacesApiKey] = useState("");
+  const [tavilyApiKey, setTavilyApiKey] = useState("");
   const [searchDataSource, setSearchDataSource] =
     useState<SearchDataSource>("serpapi");
 
@@ -65,6 +67,7 @@ export default function AgentSettingsPage() {
           googlePlacesApiKey: googlePlacesApiKey.trim()
             ? googlePlacesApiKey
             : undefined,
+          tavilyApiKey: tavilyApiKey.trim() ? tavilyApiKey : undefined,
           searchDataSource,
         }),
       });
@@ -73,6 +76,7 @@ export default function AgentSettingsPage() {
       setSuccess("Saved.");
       setSerpApiKey("");
       setGooglePlacesApiKey("");
+      setTavilyApiKey("");
       await load();
     } catch (e2) {
       setError(e2 instanceof Error ? e2.message : "Failed to save settings");
@@ -122,6 +126,9 @@ export default function AgentSettingsPage() {
             <span>
               Google Places key:{" "}
               {agent.googlePlacesApiKeyConfigured ? "Configured" : "Missing"}
+            </span>
+            <span>
+              Tavily key: {agent.tavilyApiKeyConfigured ? "Configured" : "Missing"}
             </span>
             <span>WhatsApp server: {agent.waConfigured ? "Ready" : "Not configured"}</span>
           </div>
@@ -212,6 +219,27 @@ export default function AgentSettingsPage() {
                 agent?.googlePlacesApiKeyConfigured
                   ? "•••••••• (set a new key)"
                   : "paste key"
+              }
+            />
+          </label>
+        </section>
+
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-base font-semibold">Tavily</h2>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            Used by business Verify to find Facebook, Instagram, reviews, and
+            photos via Tavily search.
+          </p>
+          <label className="mt-3 block">
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              API key
+            </span>
+            <input
+              value={tavilyApiKey}
+              onChange={(e) => setTavilyApiKey(e.target.value)}
+              className="mt-2 w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-3 text-sm text-zinc-950 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+              placeholder={
+                agent?.tavilyApiKeyConfigured ? "•••••••• (set a new key)" : "paste key"
               }
             />
           </label>

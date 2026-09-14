@@ -10,6 +10,7 @@ import { isWahaConfigured } from "@/lib/integrations/waha";
 const PutSchema = z.object({
   serpApiKey: z.string().min(1).optional(),
   googlePlacesApiKey: z.string().min(1).optional(),
+  tavilyApiKey: z.string().min(1).optional(),
   searchDataSource: z.enum(["serpapi", "google_places"]).optional(),
 });
 
@@ -25,7 +26,8 @@ export async function PUT(request: Request) {
 
     const hasKey =
       Boolean(parsed.data.serpApiKey?.trim()) ||
-      Boolean(parsed.data.googlePlacesApiKey?.trim());
+      Boolean(parsed.data.googlePlacesApiKey?.trim()) ||
+      Boolean(parsed.data.tavilyApiKey?.trim());
     const hasSource = typeof parsed.data.searchDataSource === "string";
     if (!hasKey && !hasSource) {
       return NextResponse.json(
@@ -46,6 +48,9 @@ export async function PUT(request: Request) {
     if (parsed.data.googlePlacesApiKey?.trim()) {
       patch.googlePlacesApiKeyEnc = encryptSecret(parsed.data.googlePlacesApiKey);
     }
+    if (parsed.data.tavilyApiKey?.trim()) {
+      patch.tavilyApiKeyEnc = encryptSecret(parsed.data.tavilyApiKey);
+    }
     if (parsed.data.searchDataSource) {
       patch.searchDataSource = parsed.data.searchDataSource;
     }
@@ -57,6 +62,7 @@ export async function PUT(request: Request) {
       .returning({
         serpApiKeyEnc: users.serpApiKeyEnc,
         googlePlacesApiKeyEnc: users.googlePlacesApiKeyEnc,
+        tavilyApiKeyEnc: users.tavilyApiKeyEnc,
         searchDataSource: users.searchDataSource,
         whatsAppEnabled: users.whatsAppEnabled,
       });
@@ -68,6 +74,7 @@ export async function PUT(request: Request) {
         googlePlacesApiKeyConfigured: Boolean(
           updated.googlePlacesApiKeyEnc?.trim(),
         ),
+        tavilyApiKeyConfigured: Boolean(updated.tavilyApiKeyEnc?.trim()),
         searchDataSource:
           updated.searchDataSource === "google_places"
             ? "google_places"

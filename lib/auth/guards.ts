@@ -19,6 +19,7 @@ export type CurrentUser = {
   whatsAppEnabled: boolean;
   serpApiKeyConfigured: boolean;
   googlePlacesApiKeyConfigured: boolean;
+  tavilyApiKeyConfigured: boolean;
   searchDataSource: SearchDataSource;
   waConfigured: boolean;
 };
@@ -56,6 +57,7 @@ export async function requireAuth(): Promise<CurrentUser> {
       whatsAppEnabled: users.whatsAppEnabled,
       serpApiKeyEnc: users.serpApiKeyEnc,
       googlePlacesApiKeyEnc: users.googlePlacesApiKeyEnc,
+      tavilyApiKeyEnc: users.tavilyApiKeyEnc,
       searchDataSource: users.searchDataSource,
     })
     .from(users)
@@ -80,6 +82,7 @@ export async function requireAuth(): Promise<CurrentUser> {
     whatsAppEnabled: user.whatsAppEnabled,
     serpApiKeyConfigured: Boolean(user.serpApiKeyEnc?.trim()),
     googlePlacesApiKeyConfigured: Boolean(user.googlePlacesApiKeyEnc?.trim()),
+    tavilyApiKeyConfigured: Boolean(user.tavilyApiKeyEnc?.trim()),
     searchDataSource,
     waConfigured: isWahaConfigured(),
   };

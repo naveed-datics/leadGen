@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
 import { leads, searchBusinesses, searches } from "@/lib/db/schema";
+import { parseSocialsInput } from "@/lib/social-urls";
 
 const PatchSchema = z
   .object({
@@ -12,6 +13,7 @@ const PatchSchema = z
     email: z.string().max(320).nullable().optional(),
     website: z.string().max(2000).nullable().optional(),
     address: z.string().max(1000).nullable().optional(),
+    socials: z.string().max(4000).nullable().optional(),
   })
   .refine((obj) => Object.keys(obj).length > 0, {
     message: "At least one field must be provided",
@@ -32,6 +34,14 @@ async function loadOwnedBusiness(userId: string, role: string, id: string) {
       address: searchBusinesses.address,
       searchId: searchBusinesses.searchId,
       agentId: searches.agentId,
+      placeId: searchBusinesses.placeId,
+      rating: searchBusinesses.rating,
+      reviews: searchBusinesses.reviews,
+      type: searchBusinesses.type,
+      mapsUrl: searchBusinesses.mapsUrl,
+      thumbnail: searchBusinesses.thumbnail,
+      latitude: searchBusinesses.latitude,
+      longitude: searchBusinesses.longitude,
     })
     .from(searchBusinesses)
     .innerJoin(searches, eq(searchBusinesses.searchId, searches.id))
@@ -79,6 +89,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     const nextAddress =
       patch.address !== undefined ? emptyToNull(patch.address) : existing.address;
     const nextHasWebsite = Boolean(nextWebsite);
+    const nextSocials =
+      patch.socials !== undefined ? parseSocialsInput(patch.socials) : undefined;
 
     const db = getDb();
     const [updated] = await db
@@ -103,21 +115,47 @@ export async function PATCH(request: Request, context: RouteContext) {
         searchId: searchBusinesses.searchId,
       });
 
-    // Keep linked outreach lead in sync; remove it if the business now has a website.
-    if (nextHasWebsite) {
-      await db.delete(leads).where(eq(leads.searchBusinessId, id));
-    } else {
+    const [existingLead] = await db
+      .select({ id: leads.id, socials: leads.socials })
+      .from(leads)
+      .where(eq(leads.searchBusinessId, id))
+      .limit(1);
+
+    const socialsValue =
+      nextSocials !== undefined ? nextSocials : (existingLead?.socials ?? null);
+
+    if (existingLead) {
       await db
         .update(leads)
         .set({
           title: nextTitle,
           phone: nextPhone,
           address: nextAddress,
+          ...(nextSocials !== undefined ? { socials: nextSocials } : {}),
         })
-        .where(eq(leads.searchBusinessId, id));
+        .where(eq(leads.id, existingLead.id));
+    } else if (nextSocials) {
+      await db.insert(leads).values({
+        searchId: existing.searchId,
+        searchBusinessId: id,
+        title: nextTitle,
+        placeId: existing.placeId,
+        address: nextAddress,
+        phone: nextPhone,
+        rating: existing.rating,
+        reviews: existing.reviews,
+        type: existing.type,
+        mapsUrl: existing.mapsUrl,
+        thumbnail: existing.thumbnail,
+        latitude: existing.latitude,
+        longitude: existing.longitude,
+        socials: nextSocials,
+      });
     }
 
-    return NextResponse.json({ business: updated });
+    return NextResponse.json({
+      business: { ...updated, socials: socialsValue },
+    });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

@@ -32,6 +32,7 @@ export async function GET() {
         whatsAppEnabled: agent.whatsAppEnabled,
         serpApiKeyConfigured: agent.serpApiKeyConfigured,
         googlePlacesApiKeyConfigured: agent.googlePlacesApiKeyConfigured,
+        tavilyApiKeyConfigured: agent.tavilyApiKeyConfigured,
         searchDataSource: agent.searchDataSource,
         waConfigured: isWahaConfigured(),
         proposalTemplateConfigured: Boolean(row?.proposalTemplate?.trim()),

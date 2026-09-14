@@ -1,4 +1,16 @@
-import { and, count, desc, eq, ilike, isNull, lte, or, SQL } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  ilike,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  or,
+  SQL,
+} from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
@@ -11,6 +23,7 @@ const QuerySchema = z.object({
   website: z.string().optional(),
   phone: z.string().optional(),
   hasWhatsapp: z.enum(["true", "false", "unchecked"]).optional(),
+  hasSocials: z.enum(["true", "false"]).optional(),
   websiteState: z.enum(["ok", "down", "blocked", "error", "unchecked"]).optional(),
   location: z.string().optional(),
   copyrightMaxYear: z.coerce.number().int().optional(),
@@ -125,6 +138,7 @@ export async function GET(request: Request) {
       website: url.searchParams.get("website") ?? undefined,
       phone: url.searchParams.get("phone") ?? undefined,
       hasWhatsapp: url.searchParams.get("hasWhatsapp") ?? undefined,
+      hasSocials: url.searchParams.get("hasSocials") ?? undefined,
       websiteState: url.searchParams.get("websiteState") ?? undefined,
       location: url.searchParams.get("location") ?? undefined,
       copyrightMaxYear: url.searchParams.get("copyrightMaxYear") ?? undefined,
@@ -144,6 +158,7 @@ export async function GET(request: Request) {
       website,
       phone,
       hasWhatsapp,
+      hasSocials,
       websiteState,
       location,
       copyrightMaxYear,
@@ -178,6 +193,11 @@ export async function GET(request: Request) {
       filters.push(eq(leads.hasWhatsapp, false));
     } else if (hasWhatsapp === "unchecked") {
       filters.push(isNull(leads.hasWhatsapp));
+    }
+    if (hasSocials === "true") {
+      filters.push(and(isNotNull(leads.socials), ne(leads.socials, ""))!);
+    } else if (hasSocials === "false") {
+      filters.push(or(isNull(leads.socials), eq(leads.socials, ""))!);
     }
     if (websiteState === "unchecked") {
       filters.push(isNull(searchBusinesses.websiteCheckedAt));
@@ -241,7 +261,11 @@ export async function GET(request: Request) {
       .innerJoin(searches, eq(searchBusinesses.searchId, searches.id))
       .leftJoin(leads, eq(leads.searchBusinessId, searchBusinesses.id))
       .where(whereClause)
-      .orderBy(desc(searchBusinesses.createdAt))
+      .orderBy(
+        desc(searches.createdAt),
+        desc(searchBusinesses.createdAt),
+        desc(searchBusinesses.id),
+      )
       .limit(limit)
       .offset(offset);
 

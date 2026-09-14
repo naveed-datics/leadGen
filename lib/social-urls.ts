@@ -69,6 +69,17 @@ function splitSocials(existing: string | null | undefined): string[] {
     .filter(Boolean);
 }
 
+/** Parse a user-entered socials string (comma or whitespace separated) into stored form. */
+export function parseSocialsInput(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const urls = value
+    .split(/[\s,]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (urls.length === 0) return null;
+  return mergeSocials(null, urls);
+}
+
 /** Merge URLs into a comma-separated list; de-dupe (case-insensitive), preserve order. */
 export function mergeSocials(
   existing: string | null | undefined,

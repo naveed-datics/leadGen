@@ -23,6 +23,7 @@ export const users = pgTable("users", {
   searchEnabled: boolean("search_enabled").notNull().default(true),
   serpApiKeyEnc: text("serpapi_key_enc"),
   googlePlacesApiKeyEnc: text("google_places_api_key_enc"),
+  tavilyApiKeyEnc: text("tavily_api_key_enc"),
   /** `serpapi` | `google_places` — which provider runs searches for this agent. */
   searchDataSource: text("search_data_source").notNull().default("serpapi"),
   waAccessTokenEnc: text("wa_access_token_enc"),
@@ -312,6 +313,17 @@ export const businessContacts = pgTable(
     placeOpeningHours: jsonb("place_opening_hours"),
     /** The complete unmodified compass/crawler-google-places record. */
     placeRawJson: jsonb("place_raw_json"),
+    /** Enrichment results (facebook/instagram); historically also Tavily+LLM. */
+    facebookUrl: text("facebook_url"),
+    instagramUrl: text("instagram_url"),
+    reviewsJson: jsonb("reviews_json"),
+    photoUrls: jsonb("photo_urls"),
+    /** "high" | "medium" | "low" | "none" — match confidence from the enricher. */
+    matchConfidence: text("match_confidence"),
+    /** Enricher reasoning / notes when the match was uncertain or partial. */
+    matchNotes: text("match_notes"),
+    /** Raw enricher payload (find-facebook-page); column name kept for compatibility. */
+    tavilyRawJson: jsonb("tavily_raw_json"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
