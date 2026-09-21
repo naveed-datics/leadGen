@@ -24,22 +24,33 @@ function hostnameOf(url: string): string | null {
       ? url.trim()
       : `https://${url.trim()}`;
     const { hostname } = new URL(withProtocol);
-    return hostname.toLowerCase().replace(/^www\./, "");
+    return hostname.toLowerCase();
   } catch {
     return null;
   }
 }
 
+/**
+ * True when `host` is a known social domain or any subdomain of one
+ * (e.g. `m.facebook.com`, `web.facebook.com`, `business.facebook.com`).
+ */
+function hostMatchesAny(host: string, knownHosts: Set<string>): boolean {
+  for (const known of knownHosts) {
+    if (host === known || host.endsWith(`.${known}`)) return true;
+  }
+  return false;
+}
+
 /** True when the URL is any known social host (used by proposal competitor filters). */
 export function isSocialWebsiteUrl(url: string): boolean {
   const host = hostnameOf(url);
-  return host != null && ALL_SOCIAL_HOSTS.has(host);
+  return host != null && hostMatchesAny(host, ALL_SOCIAL_HOSTS);
 }
 
 /** True when the URL is Instagram or Facebook (Find Socials move target). */
 export function isInstagramOrFacebookUrl(url: string): boolean {
   const host = hostnameOf(url);
-  return host != null && IG_FB_HOSTS.has(host);
+  return host != null && hostMatchesAny(host, IG_FB_HOSTS);
 }
 
 /** Normalize to https://host/path without trailing slash (except root). */

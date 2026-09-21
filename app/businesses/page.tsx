@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 type ActionIconVariant = "view" | "search" | "edit" | "delete" | "verify";
 
@@ -272,12 +273,29 @@ function CallIcon({ className }: { className?: string }) {
   );
 }
 
+function readWhatsappParam(value: string | null): WhatsappFilter {
+  return value === "true" || value === "false" || value === "unchecked"
+    ? value
+    : "any";
+}
+
 export default function BusinessesPage() {
+  return (
+    <Suspense fallback={null}>
+      <BusinessesPageInner />
+    </Suspense>
+  );
+}
+
+function BusinessesPageInner() {
+  const searchParams = useSearchParams();
+  const initialHasWhatsapp = readWhatsappParam(searchParams.get("hasWhatsapp"));
+
   const [industry, setIndustry] = useState("");
   const [hasWebsite, setHasWebsite] = useState<"any" | "true" | "false">("any");
   const [website, setWebsite] = useState("");
   const [phone, setPhone] = useState("");
-  const [hasWhatsapp, setHasWhatsapp] = useState<WhatsappFilter>("any");
+  const [hasWhatsapp, setHasWhatsapp] = useState<WhatsappFilter>(initialHasWhatsapp);
   const [hasSocials, setHasSocials] = useState<SocialsFilter>("any");
   const [websiteStateFilter, setWebsiteStateFilter] =
     useState<WebsiteStateFilter>("any");
@@ -289,7 +307,7 @@ export default function BusinessesPage() {
     hasWebsite: "any" as "any" | "true" | "false",
     website: "",
     phone: "",
-    hasWhatsapp: "any" as WhatsappFilter,
+    hasWhatsapp: initialHasWhatsapp,
     hasSocials: "any" as SocialsFilter,
     websiteState: "any" as WebsiteStateFilter,
     location: "",

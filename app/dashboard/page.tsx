@@ -251,7 +251,7 @@ export default function DashboardPage() {
         {stats && (
           <section className="mt-6 grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
             <Link
-              href="/searches"
+              href="/businesses"
               className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md motion-reduce:transform-none dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-emerald-800"
             >
               <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -261,8 +261,20 @@ export default function DashboardPage() {
                 {stats.totalLeads}
               </div>
               <div className="mt-2 space-y-0.5 text-sm text-zinc-600 dark:text-zinc-400">
-                <div>WhatsApp {stats.whatsappLeads}</div>
-                <div>Text {stats.textLeads}</div>
+                <Link
+                  href="/businesses?hasWhatsapp=true"
+                  className="block hover:text-emerald-700 hover:underline dark:hover:text-emerald-400"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  WhatsApp {stats.whatsappLeads}
+                </Link>
+                <Link
+                  href="/businesses?hasWhatsapp=false"
+                  className="block hover:text-emerald-700 hover:underline dark:hover:text-emerald-400"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Text {stats.textLeads}
+                </Link>
               </div>
             </Link>
             <Link
