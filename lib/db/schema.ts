@@ -173,6 +173,49 @@ export const leads = pgTable("leads", {
     .notNull(),
 });
 
+export const CAMPAIGN_STATUSES = ["draft", "active", "completed", "archived"] as const;
+
+export const campaigns = pgTable("campaigns", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  agentId: uuid("agent_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  /** "draft" | "active" | "completed" | "archived" — see CAMPAIGN_STATUSES. */
+  status: text("status").notNull().default("draft"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const campaignBusinesses = pgTable(
+  "campaign_businesses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    searchBusinessId: uuid("search_business_id")
+      .notNull()
+      .references(() => searchBusinesses.id, { onDelete: "cascade" }),
+    addedAt: timestamp("added_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    // No uniqueness constraint: a business accumulates one row per campaign
+    // it's ever been part of (rows are never deleted). "Currently taken" is
+    // enforced at the query layer by joining to campaigns.status IN
+    // ('draft', 'active'), not by a DB constraint on this table alone.
+    index("campaign_businesses_business_idx").on(table.searchBusinessId),
+    index("campaign_businesses_campaign_idx").on(table.campaignId),
+  ],
+);
+
 export const inboundLeads = pgTable(
   "inbound_leads",
   {
@@ -394,6 +437,24 @@ export const searchBusinessesRelations = relations(
     search: one(searches, {
       fields: [searchBusinesses.searchId],
       references: [searches.id],
+    }),
+  }),
+);
+
+export const campaignsRelations = relations(campaigns, ({ many }) => ({
+  campaignBusinesses: many(campaignBusinesses),
+}));
+
+export const campaignBusinessesRelations = relations(
+  campaignBusinesses,
+  ({ one }) => ({
+    campaign: one(campaigns, {
+      fields: [campaignBusinesses.campaignId],
+      references: [campaigns.id],
+    }),
+    searchBusiness: one(searchBusinesses, {
+      fields: [campaignBusinesses.searchBusinessId],
+      references: [searchBusinesses.id],
     }),
   }),
 );

@@ -335,6 +335,16 @@ export default function Home() {
           <Link href="/searches" className="font-medium underline hover:no-underline">
             Open saved searches
           </Link>
+          {bulkSummary.failed.length > 0 && (
+            <ul className="mt-2 space-y-1 border-t border-emerald-200 pt-2 text-xs text-emerald-800 dark:border-emerald-900/50 dark:text-emerald-200">
+              {bulkSummary.failed.map((failure) => (
+                <li key={failure.city}>
+                  <span className="font-semibold">{failure.city}:</span>{" "}
+                  {failure.error}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

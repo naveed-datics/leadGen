@@ -1,101 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-
-type ActionIconVariant = "view" | "search" | "edit" | "delete" | "verify";
-
-function ActionIcon({ variant }: { variant: ActionIconVariant }) {
-  const iconProps = {
-    width: 16,
-    height: 16,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    xmlns: "http://www.w3.org/2000/svg",
-    "aria-hidden": true,
-  } as const;
-
-  switch (variant) {
-    case "view":
-      return (
-        <svg {...iconProps}>
-          <path
-            d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-          <circle cx="12" cy="12" r="2.75" stroke="currentColor" strokeWidth="2" />
-        </svg>
-      );
-    case "search":
-      return (
-        <svg {...iconProps}>
-          <path
-            d="M10.5 18.5a8 8 0 1 1 0-16a8 8 0 0 1 0 16Z"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-          <path
-            d="M16.2 16.2L21 21"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
-    case "edit":
-      return (
-        <svg {...iconProps}>
-          <path
-            d="M4 20h4L18.5 9.5a2.5 2.5 0 0 0-4-4L4 16v4Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M13.5 6.5l4 4"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
-    case "delete":
-      return (
-        <svg {...iconProps}>
-          <path
-            d="M5 7h14M10 3.5h4M9.5 7v11m5-11v11M6.5 7l.7 12A2 2 0 0 0 9.2 20.5h5.6a2 2 0 0 0 2-1.9L18.5 7"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
-    case "verify":
-      return (
-        <svg {...iconProps}>
-          <path
-            d="M12 3.5l7 3v5c0 4.5-3 7.5-7 8.5-4-1-7-4-7-8.5v-5l7-3Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M9 12.3l2 2 4-4.3"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
-    default:
-      return null;
-  }
-}
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActionIcon } from "@/components/ActionIcon";
 
 type BusinessRow = {
   id: string;
@@ -122,10 +29,18 @@ type BusinessRow = {
   mapsUrl: string | null;
   searchId: string;
   createdAt: string;
+  campaignName: string | null;
 };
 
 type WhatsappFilter = "any" | "true" | "false" | "unchecked";
 type SocialsFilter = "any" | "true" | "false";
+type CampaignFilter = "any" | "none";
+type RatingFilter = "any" | "4.5" | "4" | "3.5" | "3";
+
+type CampaignOption = {
+  id: string;
+  name: string;
+};
 
 type WebsiteStateFilter =
   | "any"
@@ -147,11 +62,6 @@ const COPYRIGHT_MAX_YEAR: Partial<Record<WebsiteStateFilter, number>> = {
 };
 
 const PAGE_SIZE = 50;
-
-type IndustryOption = {
-  id: string;
-  name: string;
-};
 
 type ListResponse =
   | { items: BusinessRow[]; total: number; limit: number; offset: number }
@@ -280,38 +190,46 @@ function readWhatsappParam(value: string | null): WhatsappFilter {
 }
 
 export default function BusinessesPage() {
-  return (
-    <Suspense fallback={null}>
-      <BusinessesPageInner />
-    </Suspense>
-  );
-}
-
-function BusinessesPageInner() {
-  const searchParams = useSearchParams();
-  const initialHasWhatsapp = readWhatsappParam(searchParams.get("hasWhatsapp"));
-
   const [industry, setIndustry] = useState("");
   const [hasWebsite, setHasWebsite] = useState<"any" | "true" | "false">("any");
   const [website, setWebsite] = useState("");
   const [phone, setPhone] = useState("");
-  const [hasWhatsapp, setHasWhatsapp] = useState<WhatsappFilter>(initialHasWhatsapp);
+  const [hasWhatsapp, setHasWhatsapp] = useState<WhatsappFilter>("any");
   const [hasSocials, setHasSocials] = useState<SocialsFilter>("any");
   const [websiteStateFilter, setWebsiteStateFilter] =
     useState<WebsiteStateFilter>("any");
   const [location, setLocation] = useState("");
-  const [industries, setIndustries] = useState<IndustryOption[]>([]);
+  const [industries, setIndustries] = useState<string[]>([]);
+  const [campaignId, setCampaignId] = useState("");
+  const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("any");
+  const [campaignOptions, setCampaignOptions] = useState<CampaignOption[]>([]);
+  const [minRating, setMinRating] = useState<RatingFilter>("any");
 
   const [applied, setApplied] = useState({
     industry: "",
     hasWebsite: "any" as "any" | "true" | "false",
     website: "",
     phone: "",
-    hasWhatsapp: initialHasWhatsapp,
+    hasWhatsapp: "any" as WhatsappFilter,
     hasSocials: "any" as SocialsFilter,
     websiteState: "any" as WebsiteStateFilter,
     location: "",
+    campaignId: "",
+    campaignFilter: "any" as CampaignFilter,
+    minRating: "any" as RatingFilter,
   });
+
+  // Seed the WhatsApp filter from the URL (e.g. deep-linked from the dashboard)
+  // after mount only, so the server-rendered and first client render match —
+  // reading it during render via useSearchParams() requires a Suspense
+  // boundary and causes a hydration mismatch on this fully client-fetched page.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = readWhatsappParam(params.get("hasWhatsapp"));
+    if (fromUrl === "any") return;
+    setHasWhatsapp(fromUrl);
+    setApplied((prev) => ({ ...prev, hasWhatsapp: fromUrl }));
+  }, []);
 
   const [items, setItems] = useState<BusinessRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -382,6 +300,11 @@ function BusinessesPageInner() {
       }
     }
     if (applied.location.trim()) params.set("location", applied.location.trim());
+    if (applied.campaignId) params.set("campaign", applied.campaignId);
+    else if (applied.campaignFilter !== "any") {
+      params.set("campaignFilter", applied.campaignFilter);
+    }
+    if (applied.minRating !== "any") params.set("minRating", applied.minRating);
     params.set("limit", String(PAGE_SIZE));
     params.set("offset", String(page * PAGE_SIZE));
     return params.toString();
@@ -395,15 +318,20 @@ function BusinessesPageInner() {
     applied.hasWhatsapp !== "any" ||
     applied.hasSocials !== "any" ||
     applied.websiteState !== "any" ||
-    applied.location.trim() !== "";
+    applied.location.trim() !== "" ||
+    applied.campaignId !== "" ||
+    applied.campaignFilter !== "any" ||
+    applied.minRating !== "any";
 
   useEffect(() => {
     let cancelled = false;
     async function loadIndustries() {
       try {
-        const res = await fetch("/api/agent/industries", { cache: "no-store" });
+        const res = await fetch("/api/businesses/industries", {
+          cache: "no-store",
+        });
         const data = (await res.json()) as {
-          industries?: IndustryOption[];
+          industries?: string[];
           error?: string;
         };
         if (cancelled || !res.ok || !Array.isArray(data.industries)) return;
@@ -413,6 +341,29 @@ function BusinessesPageInner() {
       }
     }
     void loadIndustries();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCampaigns() {
+      try {
+        const res = await fetch("/api/campaigns?status=draft,active", {
+          cache: "no-store",
+        });
+        const data = (await res.json()) as {
+          campaigns?: CampaignOption[];
+          error?: string;
+        };
+        if (cancelled || !res.ok || !Array.isArray(data.campaigns)) return;
+        setCampaignOptions(data.campaigns);
+      } catch {
+        // ignore — dropdown stays empty / Any only
+      }
+    }
+    void loadCampaigns();
     return () => {
       cancelled = true;
     };
@@ -459,6 +410,9 @@ function BusinessesPageInner() {
       hasSocials,
       websiteState: websiteStateFilter,
       location,
+      campaignId,
+      campaignFilter,
+      minRating,
     });
   }
 
@@ -471,6 +425,9 @@ function BusinessesPageInner() {
     setHasSocials("any");
     setWebsiteStateFilter("any");
     setLocation("");
+    setCampaignId("");
+    setCampaignFilter("any");
+    setMinRating("any");
     setPage(0);
     setApplied({
       industry: "",
@@ -481,6 +438,9 @@ function BusinessesPageInner() {
       hasSocials: "any",
       websiteState: "any",
       location: "",
+      campaignId: "",
+      campaignFilter: "any",
+      minRating: "any",
     });
   }
 
@@ -1117,9 +1077,9 @@ function BusinessesPageInner() {
               className={`mt-1.5 ${inputClass}`}
             >
               <option value="">All industries</option>
-              {industries.map((opt) => (
-                <option key={opt.id} value={opt.name}>
-                  {opt.name}
+              {industries.map((name) => (
+                <option key={name} value={name}>
+                  {name}
                 </option>
               ))}
             </select>
@@ -1229,6 +1189,49 @@ function BusinessesPageInner() {
               placeholder="Zip code or city"
             />
           </label>
+          <label className="block">
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              Campaign
+            </span>
+            <select
+              value={campaignId ? `id:${campaignId}` : campaignFilter}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value.startsWith("id:")) {
+                  setCampaignId(value.slice(3));
+                  setCampaignFilter("any");
+                } else {
+                  setCampaignId("");
+                  setCampaignFilter(value as CampaignFilter);
+                }
+              }}
+              className={`mt-1.5 ${inputClass}`}
+            >
+              <option value="any">Any</option>
+              <option value="none">None</option>
+              {campaignOptions.map((option) => (
+                <option key={option.id} value={`id:${option.id}`}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              Min rating
+            </span>
+            <select
+              value={minRating}
+              onChange={(e) => setMinRating(e.target.value as RatingFilter)}
+              className={`mt-1.5 ${inputClass}`}
+            >
+              <option value="any">Any</option>
+              <option value="4.5">4.5+</option>
+              <option value="4">4+</option>
+              <option value="3.5">3.5+</option>
+              <option value="3">3+</option>
+            </select>
+          </label>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
@@ -1285,25 +1288,26 @@ function BusinessesPageInner() {
         <table className="w-full table-fixed text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/60">
             <tr>
-              <th className="w-[18%] px-3 py-3 font-medium">Business</th>
-              <th className="w-[10%] px-3 py-3 font-medium">Industry</th>
-              <th className="w-[10%] px-3 py-3 font-medium">Location</th>
-              <th className="w-[13%] px-3 py-3 font-medium">Social media</th>
-              <th className="w-[11%] px-3 py-3 font-medium">Phone</th>
-              <th className="w-[26%] px-3 py-3 font-medium">Website</th>
+              <th className="w-[17%] px-3 py-3 font-medium">Business</th>
+              <th className="w-[9%] px-3 py-3 font-medium">Industry</th>
+              <th className="w-[9%] px-3 py-3 font-medium">Location</th>
+              <th className="w-[8%] px-3 py-3 font-medium">Rating</th>
+              <th className="w-[12%] px-3 py-3 font-medium">Social media</th>
+              <th className="w-[10%] px-3 py-3 font-medium">Phone</th>
+              <th className="w-[23%] px-3 py-3 font-medium">Website</th>
               <th className="w-[12%] px-3 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-zinc-500">
+                <td colSpan={9} className="px-3 py-8 text-zinc-500">
                   Loading…
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-zinc-500">
+                <td colSpan={9} className="px-3 py-8 text-zinc-500">
                   No businesses match these filters.
                 </td>
               </tr>
@@ -1329,6 +1333,11 @@ function BusinessesPageInner() {
                         <span title={row.title}>{row.title}</span>
                       )}
                     </div>
+                    {row.campaignName ? (
+                      <span className="mt-0.5 inline-block rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
+                        {row.campaignName}
+                      </span>
+                    ) : null}
                     {row.address ? (
                       <div
                         className="mt-0.5 truncate text-xs text-zinc-500"
@@ -1349,6 +1358,18 @@ function BusinessesPageInner() {
                     title={row.location}
                   >
                     {row.location}
+                  </td>
+                  <td className="truncate px-3 py-3 align-top text-zinc-700 dark:text-zinc-300">
+                    {row.rating != null ? (
+                      <>
+                        {row.rating.toFixed(1)}★
+                        {row.reviews != null ? (
+                          <span className="text-xs text-zinc-500"> ({row.reviews})</span>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="text-zinc-400">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-3 align-top">
                     {row.socials ? (

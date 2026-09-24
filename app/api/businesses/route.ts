@@ -3,7 +3,9 @@ import {
   count,
   desc,
   eq,
+  gte,
   ilike,
+  inArray,
   isNotNull,
   isNull,
   lte,
@@ -15,7 +17,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, requireAuth } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
-import { leads, searchBusinesses, searches } from "@/lib/db/schema";
+import { campaignBusinesses, campaigns, leads, searchBusinesses, searches } from "@/lib/db/schema";
+
+/** Campaigns whose businesses are still considered "currently taken". */
+const ACTIVE_CAMPAIGN_STATUSES = ["draft", "active"] as const;
 
 const QuerySchema = z.object({
   industry: z.string().optional(),
@@ -28,6 +33,10 @@ const QuerySchema = z.object({
   location: z.string().optional(),
   copyrightMaxYear: z.coerce.number().int().optional(),
   q: z.string().optional(),
+  minRating: z.coerce.number().min(0).max(5).optional(),
+  excludeCampaigned: z.enum(["true"]).optional(),
+  campaign: z.string().uuid().optional(),
+  campaignFilter: z.enum(["any", "none"]).optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   offset: z.coerce.number().int().min(0).optional(),
   format: z.enum(["json", "csv"]).optional(),
@@ -58,6 +67,8 @@ export type BusinessListItem = {
   mapsUrl: string | null;
   searchId: string;
   createdAt: string;
+  /** Name of the campaign this business currently belongs to (draft/active only), if any. */
+  campaignName: string | null;
 };
 
 function csvEscape(value: string | number | boolean | null | undefined): string {
@@ -97,6 +108,7 @@ function toCsv(rows: BusinessListItem[]): string {
     "Maps URL",
     "Search ID",
     "Created At",
+    "Campaign",
   ];
   const lines = [header.join(",")];
   for (const row of rows) {
@@ -122,6 +134,7 @@ function toCsv(rows: BusinessListItem[]): string {
         csvEscape(row.mapsUrl),
         csvEscape(row.searchId),
         csvEscape(row.createdAt),
+        csvEscape(row.campaignName ?? ""),
       ].join(","),
     );
   }
@@ -143,6 +156,10 @@ export async function GET(request: Request) {
       location: url.searchParams.get("location") ?? undefined,
       copyrightMaxYear: url.searchParams.get("copyrightMaxYear") ?? undefined,
       q: url.searchParams.get("q") ?? undefined,
+      minRating: url.searchParams.get("minRating") ?? undefined,
+      excludeCampaigned: url.searchParams.get("excludeCampaigned") ?? undefined,
+      campaign: url.searchParams.get("campaign") ?? undefined,
+      campaignFilter: url.searchParams.get("campaignFilter") ?? undefined,
       limit: url.searchParams.get("limit") ?? undefined,
       offset: url.searchParams.get("offset") ?? undefined,
       format: url.searchParams.get("format") ?? undefined,
@@ -163,6 +180,10 @@ export async function GET(request: Request) {
       location,
       copyrightMaxYear,
       q,
+      minRating,
+      excludeCampaigned,
+      campaign,
+      campaignFilter,
       format = "json",
     } = parsed.data;
     const isCsv = format === "csv";
@@ -207,6 +228,9 @@ export async function GET(request: Request) {
     if (copyrightMaxYear != null) {
       filters.push(lte(searchBusinesses.copyrightYear, copyrightMaxYear));
     }
+    if (minRating != null) {
+      filters.push(gte(searchBusinesses.rating, minRating));
+    }
     if (location?.trim()) {
       const term = `%${location.trim()}%`;
       filters.push(
@@ -219,15 +243,42 @@ export async function GET(request: Request) {
     if (q?.trim()) {
       filters.push(ilike(searchBusinesses.title, `%${q.trim()}%`));
     }
+    if (excludeCampaigned === "true") {
+      filters.push(isNull(campaigns.id));
+    }
+    if (campaign) {
+      filters.push(
+        and(eq(campaignBusinesses.campaignId, campaign), isNotNull(campaigns.id))!,
+      );
+    } else if (campaignFilter === "none") {
+      filters.push(isNull(campaigns.id));
+    } else if (campaignFilter === "any") {
+      filters.push(isNotNull(campaigns.id));
+    }
 
     const whereClause = filters.length > 0 ? and(...filters) : undefined;
     const db = getDb();
+
+    // "Has a campaign" only ever means "has a *current* (draft/active) one".
+    // campaignBusinesses must be joined before campaigns (its own join
+    // condition can only reference tables already in scope), so the status
+    // check is applied on the campaigns join instead — campaigns.id ends up
+    // null for historical (completed/archived) memberships, same net effect.
+    const campaignsJoinCondition = and(
+      eq(campaigns.id, campaignBusinesses.campaignId),
+      inArray(campaigns.status, [...ACTIVE_CAMPAIGN_STATUSES]),
+    );
 
     const [totalRow] = await db
       .select({ total: count() })
       .from(searchBusinesses)
       .innerJoin(searches, eq(searchBusinesses.searchId, searches.id))
       .leftJoin(leads, eq(leads.searchBusinessId, searchBusinesses.id))
+      .leftJoin(
+        campaignBusinesses,
+        eq(campaignBusinesses.searchBusinessId, searchBusinesses.id),
+      )
+      .leftJoin(campaigns, campaignsJoinCondition)
       .where(whereClause);
 
     const rows = await db
@@ -256,10 +307,16 @@ export async function GET(request: Request) {
         mapsUrl: searchBusinesses.mapsUrl,
         searchId: searchBusinesses.searchId,
         createdAt: searchBusinesses.createdAt,
+        campaignName: campaigns.name,
       })
       .from(searchBusinesses)
       .innerJoin(searches, eq(searchBusinesses.searchId, searches.id))
       .leftJoin(leads, eq(leads.searchBusinessId, searchBusinesses.id))
+      .leftJoin(
+        campaignBusinesses,
+        eq(campaignBusinesses.searchBusinessId, searchBusinesses.id),
+      )
+      .leftJoin(campaigns, campaignsJoinCondition)
       .where(whereClause)
       .orderBy(
         desc(searches.createdAt),
@@ -298,6 +355,7 @@ export async function GET(request: Request) {
       mapsUrl: row.mapsUrl,
       searchId: row.searchId,
       createdAt: row.createdAt.toISOString(),
+      campaignName: row.campaignName,
     }));
 
     if (isCsv) {

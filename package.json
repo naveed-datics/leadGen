@@ -18,6 +18,7 @@
     "db:migrate:business-contacts": "tsx scripts/apply-business-contacts-migration.ts",
     "db:migrate:business-contacts-raw": "tsx scripts/apply-business-contacts-raw-migration.ts",
     "db:migrate:business-contacts-place": "tsx scripts/apply-business-contacts-place-migration.ts",
+    "db:migrate:campaigns": "tsx scripts/apply-campaigns-migration.ts",
     "db:studio": "drizzle-kit studio",
     "cron:follow-ups": "tsx scripts/cron-follow-ups.ts"
   },

@@ -115,6 +115,7 @@ export function Nav({ children }: { children: React.ReactNode }) {
       { label: "Contacts", href: "/agent/contacts", show: role === "agent" },
       { label: "Saved Searches", href: "/searches", show: true },
       { label: "Business", href: "/businesses", show: true },
+      { label: "Campaigns", href: "/campaigns", show: true },
       { label: "Industries", href: "/agent/industries", show: role === "agent" },
       { label: "Demos", href: "/demos", show: true },
       { label: "Leads", href: "/leads", show: true },
@@ -130,6 +131,7 @@ export function Nav({ children }: { children: React.ReactNode }) {
     if (href === "/agent/contacts") return pathname === "/agent/contacts";
     if (href === "/searches") return pathname === "/searches" || pathname.startsWith("/searches/");
     if (href === "/businesses") return pathname === "/businesses" || pathname.startsWith("/businesses/");
+    if (href === "/campaigns") return pathname === "/campaigns" || pathname.startsWith("/campaigns/");
     if (href === "/agent/industries") {
       return pathname === "/agent/industries" || pathname.startsWith("/agent/industries/");
     }

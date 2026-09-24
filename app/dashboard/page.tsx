@@ -250,33 +250,30 @@ export default function DashboardPage() {
 
         {stats && (
           <section className="mt-6 grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
-            <Link
-              href="/businesses"
-              className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md motion-reduce:transform-none dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-emerald-800"
-            >
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Potential clients (leads)
-              </div>
-              <div className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-                {stats.totalLeads}
-              </div>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md motion-reduce:transform-none dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-emerald-800">
+              <Link href="/businesses" className="block">
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Potential clients (leads)
+                </div>
+                <div className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                  {stats.totalLeads}
+                </div>
+              </Link>
               <div className="mt-2 space-y-0.5 text-sm text-zinc-600 dark:text-zinc-400">
                 <Link
                   href="/businesses?hasWhatsapp=true"
                   className="block hover:text-emerald-700 hover:underline dark:hover:text-emerald-400"
-                  onClick={(e) => e.stopPropagation()}
                 >
                   WhatsApp {stats.whatsappLeads}
                 </Link>
                 <Link
                   href="/businesses?hasWhatsapp=false"
                   className="block hover:text-emerald-700 hover:underline dark:hover:text-emerald-400"
-                  onClick={(e) => e.stopPropagation()}
                 >
                   Text {stats.textLeads}
                 </Link>
               </div>
-            </Link>
+            </div>
             <Link
               href="/proposals/in-progress"
               className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md motion-reduce:transform-none dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-emerald-800"
