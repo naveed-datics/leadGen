@@ -9,11 +9,14 @@ import { checkWhatsAppExists, delay } from "@/lib/whatsapp";
 export const maxDuration = 300;
 
 const BodySchema = z.object({
-  limit: z.number().int().min(1).max(100).optional(),
+  limit: z.number().int().min(1).max(25).optional(),
   resumeAfter: z.string().uuid().optional(),
 });
 
-const DEFAULT_LIMIT = 40;
+// Each check is capped at 15s (see checkWahaContactExists) plus a 350ms
+// delay between items. 15 items keeps the worst case (every check timing
+// out) safely inside maxDuration below, with margin for DB/network overhead.
+const DEFAULT_LIMIT = 15;
 
 export async function POST(request: Request) {
   if (!process.env.DATABASE_URL) {

@@ -928,6 +928,10 @@ export default function BusinessesPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(resumeAfter ? { resumeAfter } : {}),
+          // Server-side batch is bounded by maxDuration (300s); give it a
+          // little headroom rather than hanging forever if a request never
+          // resolves (e.g. the function was killed mid-batch).
+          signal: AbortSignal.timeout(320_000),
         });
         const data = (await res.json()) as CheckNoWebsiteResponse;
         if (!res.ok) {
@@ -959,8 +963,12 @@ export default function BusinessesPage() {
           return;
         }
       }
-    } catch {
-      setError("Network error while checking WhatsApp");
+    } catch (err) {
+      setError(
+        err instanceof DOMException && err.name === "TimeoutError"
+          ? "WhatsApp check timed out. It may still be running in the background — try again in a minute to resume."
+          : "Network error while checking WhatsApp",
+      );
       setWhatsappStatus(null);
     } finally {
       setCheckingWhatsapp(false);

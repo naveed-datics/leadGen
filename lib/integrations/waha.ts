@@ -93,9 +93,13 @@ export async function checkWahaContactExists(
     session: config.session,
   });
 
+  // A contact-existence lookup should return in a couple of seconds — cap it
+  // well below wahaFetch's 120s default so one slow/hanging phone number
+  // can't stall an entire sequential batch (see checkWahaContactExists callers).
   const response = await wahaFetch(
     config,
     `/api/contacts/check-exists?${params.toString()}`,
+    { signal: AbortSignal.timeout(15_000) },
   );
   if (!response.ok) {
     const text = await response.text();
