@@ -12,6 +12,8 @@ const PUBLIC_PATHS = new Set<string>([
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;
   if (pathname.startsWith("/api/whatsapp/webhook/")) return true;
+  // Chrome extension routes authenticate with their own bearer token.
+  if (pathname.startsWith("/api/extension/")) return true;
   if (pathname.startsWith("/_next")) return true;
   if (pathname.startsWith("/api/auth")) return true;
   if (pathname === "/favicon.ico") return true;

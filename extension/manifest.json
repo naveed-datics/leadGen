@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "LeadGen Facebook Outreach",
+  "version": "0.1.0",
+  "description": "Sends approved LeadGen outreach DMs from your own logged-in Facebook session, at a slow, capped pace.",
+  "permissions": ["storage", "alarms", "scripting", "tabs"],
+  "host_permissions": ["https://www.facebook.com/*", "https://web.facebook.com/*", "https://m.facebook.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "LeadGen Outreach" }
+}

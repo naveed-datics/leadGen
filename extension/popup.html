@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font: 13px system-ui, sans-serif; width: 320px; margin: 12px; color: #1a1a1a; }
+      label { display: block; margin: 8px 0 2px; font-weight: 600; }
+      input { width: 100%; box-sizing: border-box; padding: 6px; }
+      button { margin: 8px 6px 0 0; padding: 6px 12px; cursor: pointer; }
+      #status { margin-top: 10px; font-weight: 600; }
+      #log { margin-top: 8px; font: 11px ui-monospace, monospace; max-height: 140px; overflow: auto; white-space: pre-wrap; color: #555; }
+      .err { color: #b00020; }
+    </style>
+  </head>
+  <body>
+    <label for="appUrl">LeadGen app URL</label>
+    <input id="appUrl" placeholder="https://your-leadgen-app.com" />
+    <label for="token">Extension token</label>
+    <input id="token" type="password" placeholder="lgx_..." />
+    <button id="save">Save &amp; connect</button>
+    <div>
+      <button id="start">Start</button>
+      <button id="stop">Pause</button>
+    </div>
+    <div id="status"></div>
+    <div id="counts"></div>
+    <div id="log"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

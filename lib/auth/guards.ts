@@ -17,6 +17,7 @@ export type CurrentUser = {
   active: boolean;
   searchEnabled: boolean;
   whatsAppEnabled: boolean;
+  socialMessagingEnabled: boolean;
   serpApiKeyConfigured: boolean;
   googlePlacesApiKeyConfigured: boolean;
   tavilyApiKeyConfigured: boolean;
@@ -55,6 +56,7 @@ export async function requireAuth(): Promise<CurrentUser> {
       active: users.active,
       searchEnabled: users.searchEnabled,
       whatsAppEnabled: users.whatsAppEnabled,
+      socialMessagingEnabled: users.socialMessagingEnabled,
       serpApiKeyEnc: users.serpApiKeyEnc,
       googlePlacesApiKeyEnc: users.googlePlacesApiKeyEnc,
       tavilyApiKeyEnc: users.tavilyApiKeyEnc,
@@ -80,6 +82,7 @@ export async function requireAuth(): Promise<CurrentUser> {
     active: user.active,
     searchEnabled: user.searchEnabled,
     whatsAppEnabled: user.whatsAppEnabled,
+    socialMessagingEnabled: user.socialMessagingEnabled,
     serpApiKeyConfigured: Boolean(user.serpApiKeyEnc?.trim()),
     googlePlacesApiKeyConfigured: Boolean(user.googlePlacesApiKeyEnc?.trim()),
     tavilyApiKeyConfigured: Boolean(user.tavilyApiKeyEnc?.trim()),

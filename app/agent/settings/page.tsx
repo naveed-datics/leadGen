@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { WhatsAppConnectionCard } from "@/components/WhatsAppConnectionCard";
 import { DemoWebhookCard } from "@/components/DemoWebhookCard";
+import { FacebookExtensionCard } from "@/components/FacebookExtensionCard";
 import type { SearchDataSource } from "@/lib/types";
 
 type AgentSettings = {
@@ -158,6 +159,8 @@ export default function AgentSettingsPage() {
       )}
 
       <WhatsAppConnectionCard />
+
+      <FacebookExtensionCard />
 
       <DemoWebhookCard />
 

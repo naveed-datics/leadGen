@@ -31,6 +31,13 @@ export const users = pgTable("users", {
   waBusinessAccountId: text("wa_business_account_id"),
   waAppId: text("wa_app_id"),
   whatsAppEnabled: boolean("whatsapp_enabled").notNull().default(false),
+  /** Admin flag: allows the agent to use the Facebook outreach extension. */
+  socialMessagingEnabled: boolean("social_messaging_enabled")
+    .notNull()
+    .default(false),
+  fbDailyCap: integer("fb_daily_cap").notNull().default(10),
+  /** SHA-256 of the extension token; the raw token is shown once. */
+  extensionTokenHash: text("extension_token_hash"),
   proposalTemplate: text("proposal_template"),
   demoEnabled: boolean("demo_enabled").notNull().default(false),
   wpBaseUrl: text("wp_base_url"),
@@ -191,6 +198,57 @@ export const campaigns = pgTable("campaigns", {
     .defaultNow()
     .notNull(),
 });
+
+export const SOCIAL_JOB_STATUSES = [
+  "queued",
+  "approved",
+  "sending",
+  "sent",
+  "failed",
+  "skipped",
+  "cancelled",
+] as const;
+
+export const socialOutreachJobs = pgTable(
+  "social_outreach_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    searchBusinessId: uuid("search_business_id")
+      .notNull()
+      .references(() => searchBusinesses.id, { onDelete: "cascade" }),
+    leadId: uuid("lead_id").references(() => leads.id, {
+      onDelete: "set null",
+    }),
+    campaignId: uuid("campaign_id").references(() => campaigns.id, {
+      onDelete: "set null",
+    }),
+    channel: text("channel").notNull().default("facebook"),
+    targetUrl: text("target_url").notNull(),
+    body: text("body").notNull(),
+    /** See SOCIAL_JOB_STATUSES. */
+    status: text("status").notNull().default("queued"),
+    reason: text("reason"),
+    attempts: integer("attempts").notNull().default(0),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("social_outreach_jobs_agent_status_idx").on(
+      table.agentId,
+      table.status,
+    ),
+    index("social_outreach_jobs_business_idx").on(table.searchBusinessId),
+  ],
+);
 
 export const campaignBusinesses = pgTable(
   "campaign_businesses",
