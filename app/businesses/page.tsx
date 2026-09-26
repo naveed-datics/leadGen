@@ -193,6 +193,7 @@ export default function BusinessesPage() {
   const [industry, setIndustry] = useState("");
   const [hasWebsite, setHasWebsite] = useState<"any" | "true" | "false">("any");
   const [website, setWebsite] = useState("");
+  const [q, setQ] = useState("");
   const [phone, setPhone] = useState("");
   const [hasWhatsapp, setHasWhatsapp] = useState<WhatsappFilter>("any");
   const [hasSocials, setHasSocials] = useState<SocialsFilter>("any");
@@ -209,6 +210,7 @@ export default function BusinessesPage() {
     industry: "",
     hasWebsite: "any" as "any" | "true" | "false",
     website: "",
+    q: "",
     phone: "",
     hasWhatsapp: "any" as WhatsappFilter,
     hasSocials: "any" as SocialsFilter,
@@ -236,6 +238,8 @@ export default function BusinessesPage() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fbQueueingId, setFbQueueingId] = useState<string | null>(null);
+  const [fbNotice, setFbNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const [checkingWhatsapp, setCheckingWhatsapp] = useState(false);
@@ -288,6 +292,7 @@ export default function BusinessesPage() {
     if (applied.industry.trim()) params.set("industry", applied.industry.trim());
     if (applied.hasWebsite !== "any") params.set("hasWebsite", applied.hasWebsite);
     if (applied.website.trim()) params.set("website", applied.website.trim());
+    if (applied.q.trim()) params.set("q", applied.q.trim());
     if (applied.phone.trim()) params.set("phone", applied.phone.trim());
     if (applied.hasWhatsapp !== "any") params.set("hasWhatsapp", applied.hasWhatsapp);
     if (applied.hasSocials !== "any") params.set("hasSocials", applied.hasSocials);
@@ -314,6 +319,7 @@ export default function BusinessesPage() {
     applied.industry.trim() !== "" ||
     applied.hasWebsite !== "any" ||
     applied.website.trim() !== "" ||
+    applied.q.trim() !== "" ||
     applied.phone.trim() !== "" ||
     applied.hasWhatsapp !== "any" ||
     applied.hasSocials !== "any" ||
@@ -405,6 +411,7 @@ export default function BusinessesPage() {
       industry,
       hasWebsite,
       website,
+      q,
       phone,
       hasWhatsapp,
       hasSocials,
@@ -420,6 +427,7 @@ export default function BusinessesPage() {
     setIndustry("");
     setHasWebsite("any");
     setWebsite("");
+    setQ("");
     setPhone("");
     setHasWhatsapp("any");
     setHasSocials("any");
@@ -433,6 +441,7 @@ export default function BusinessesPage() {
       industry: "",
       hasWebsite: "any",
       website: "",
+      q: "",
       phone: "",
       hasWhatsapp: "any",
       hasSocials: "any",
@@ -779,6 +788,41 @@ export default function BusinessesPage() {
     }
   }
 
+  async function queueFacebook(businessIds: string[], rowId: string) {
+    setFbQueueingId(rowId);
+    setFbNotice(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/social/outreach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessIds }),
+      });
+      const data = (await res.json()) as {
+        created?: number;
+        skipped?: Array<{ reason: string }>;
+        error?: string;
+      };
+      if (!res.ok) {
+        setError(data.error ?? "Failed to queue Facebook DMs");
+        return;
+      }
+      const skipped = data.skipped ?? [];
+      const noUrl = skipped.filter((item) => item.reason === "no_facebook_url").length;
+      const already = skipped.filter(
+        (item) => item.reason === "already_queued_or_sent",
+      ).length;
+      const parts = [`Queued ${data.created ?? 0} Facebook DM${data.created === 1 ? "" : "s"}`];
+      if (noUrl > 0) parts.push(`${noUrl} without a Facebook page`);
+      if (already > 0) parts.push(`${already} already queued or sent`);
+      setFbNotice(`${parts.join(", ")}. Review and approve them in the outreach queue.`);
+    } catch {
+      setError("Network error while queueing Facebook DMs");
+    } finally {
+      setFbQueueingId(null);
+    }
+  }
+
   async function verifyNoWebsiteSocials() {
     setVerifyingNoWebsite(true);
     setError(null);
@@ -1075,6 +1119,18 @@ export default function BusinessesPage() {
         className="mt-7 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+          <label className="block sm:col-span-2">
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              Search name or phone
+            </span>
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className={`mt-1.5 ${inputClass}`}
+              placeholder="Business name or phone number"
+            />
+          </label>
           <label className="block">
             <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
               Industry
@@ -1274,6 +1330,16 @@ export default function BusinessesPage() {
             ? ` (showing ${items.length})`
             : null}
         </p>
+        {items.length > 0 && (
+          <button
+            type="button"
+            onClick={() => void queueFacebook(items.map((item) => item.id), "page")}
+            disabled={fbQueueingId !== null || loading}
+            className="rounded-xl border border-blue-300 px-4 py-2.5 text-sm font-semibold text-blue-800 shadow-sm transition hover:bg-blue-50 disabled:opacity-60 dark:border-blue-800 dark:text-blue-200 dark:hover:bg-blue-950/40"
+          >
+            {fbQueueingId === "page" ? "Queueing…" : "Queue this page on Facebook"}
+          </button>
+        )}
         {hasActiveFilters && (
           <button
             type="button"
@@ -1291,6 +1357,15 @@ export default function BusinessesPage() {
           </button>
         )}
       </div>
+
+      {fbNotice && (
+        <p role="status" className="mt-2 text-sm text-blue-800 dark:text-blue-200">
+          {fbNotice}{" "}
+          <Link href="/agent/social-outreach" className="font-semibold underline">
+            Open queue
+          </Link>
+        </p>
+      )}
 
       <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <table className="w-full table-fixed text-left text-sm">
@@ -1500,6 +1575,16 @@ export default function BusinessesPage() {
                           <ActionIcon variant="verify" />
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => void queueFacebook([row.id], row.id)}
+                        disabled={fbQueueingId !== null}
+                        title="Queue Facebook DM"
+                        aria-label="Queue Facebook DM"
+                        className="rounded-lg border border-blue-300 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-60 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40"
+                      >
+                        {fbQueueingId === row.id ? "…" : "FB DM"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => openEdit(row)}

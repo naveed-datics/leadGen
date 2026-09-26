@@ -137,6 +137,7 @@ export async function GET(request: Request) {
         active: users.active,
         searchEnabled: users.searchEnabled,
         whatsAppEnabled: users.whatsAppEnabled,
+        socialMessagingEnabled: users.socialMessagingEnabled,
         serpApiKeyEnc: users.serpApiKeyEnc,
         googlePlacesApiKeyEnc: users.googlePlacesApiKeyEnc,
         searchDataSource: users.searchDataSource,
@@ -157,6 +158,7 @@ export async function GET(request: Request) {
         active: r.active,
         searchEnabled: r.searchEnabled,
         whatsAppEnabled: r.whatsAppEnabled,
+        socialMessagingEnabled: r.socialMessagingEnabled,
         serpApiKeyConfigured: Boolean(r.serpApiKeyEnc?.trim()),
         googlePlacesApiKeyConfigured: Boolean(r.googlePlacesApiKeyEnc?.trim()),
         searchDataSource:

@@ -14,6 +14,7 @@ const PatchSchema = z
     active: z.boolean().optional(),
     searchEnabled: z.boolean().optional(),
     whatsAppEnabled: z.boolean().optional(),
+    socialMessagingEnabled: z.boolean().optional(),
   })
   .refine((obj) => Object.keys(obj).length > 0, {
     message: "At least one field must be provided",
@@ -140,6 +141,9 @@ export async function PATCH(
         ...(typeof parsed.data.whatsAppEnabled === "boolean"
           ? { whatsAppEnabled: parsed.data.whatsAppEnabled }
           : null),
+        ...(typeof parsed.data.socialMessagingEnabled === "boolean"
+          ? { socialMessagingEnabled: parsed.data.socialMessagingEnabled }
+          : null),
         updatedAt: new Date(),
       })
       .where(eq(users.id, id))
@@ -152,6 +156,7 @@ export async function PATCH(
         active: users.active,
         searchEnabled: users.searchEnabled,
         whatsAppEnabled: users.whatsAppEnabled,
+        socialMessagingEnabled: users.socialMessagingEnabled,
         updatedAt: users.updatedAt,
       });
 
@@ -168,6 +173,7 @@ export async function PATCH(
         active: updated.active,
         searchEnabled: updated.searchEnabled,
         whatsAppEnabled: updated.whatsAppEnabled,
+        socialMessagingEnabled: updated.socialMessagingEnabled,
         updatedAt: updated.updatedAt.toISOString(),
       },
     });

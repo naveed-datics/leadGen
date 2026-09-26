@@ -10,6 +10,7 @@ type AgentRow = {
   active: boolean;
   searchEnabled: boolean;
   whatsAppEnabled: boolean;
+  socialMessagingEnabled: boolean;
   serpApiKeyConfigured: boolean;
   googlePlacesApiKeyConfigured: boolean;
   searchDataSource: "serpapi" | "google_places";
@@ -308,19 +309,20 @@ export default function AdminAgentsPage() {
               <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Active</th>
               <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Search</th>
               <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">WhatsApp</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Facebook DM</th>
               <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Integrations</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-4 py-4" colSpan={6}>
+                <td className="px-4 py-4" colSpan={7}>
                   Loading…
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td className="px-4 py-4" colSpan={6}>
+                <td className="px-4 py-4" colSpan={7}>
                   No agents found.
                 </td>
               </tr>
@@ -405,6 +407,24 @@ export default function AdminAgentsPage() {
                       }`}
                     >
                       {a.whatsAppEnabled ? "Enabled" : "Disabled"}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() =>
+                        void toggleAgent(a.id, {
+                          socialMessagingEnabled: !a.socialMessagingEnabled,
+                        })
+                      }
+                      aria-pressed={a.socialMessagingEnabled}
+                      aria-label={`${a.socialMessagingEnabled ? "Disable" : "Enable"} Facebook DM for ${a.name}`}
+                      className={`min-h-9 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                        a.socialMessagingEnabled
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
+                          : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      {a.socialMessagingEnabled ? "Enabled" : "Disabled"}
                     </button>
                   </td>
                   <td className="px-4 py-3 text-xs">

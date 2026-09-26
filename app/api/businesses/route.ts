@@ -12,6 +12,7 @@ import {
   ne,
   or,
   SQL,
+  sql,
 } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -241,7 +242,19 @@ export async function GET(request: Request) {
       );
     }
     if (q?.trim()) {
-      filters.push(ilike(searchBusinesses.title, `%${q.trim()}%`));
+      // Name OR phone. Phone also matches on digits only, so "555 123" finds
+      // "(555) 123-4567".
+      const term = `%${q.trim()}%`;
+      const digits = q.replace(/\D/g, "");
+      filters.push(
+        or(
+          ilike(searchBusinesses.title, term),
+          ilike(searchBusinesses.phone, term),
+          digits.length >= 3
+            ? sql`regexp_replace(${searchBusinesses.phone}, '[^0-9]', '', 'g') LIKE ${`%${digits}%`}`
+            : undefined,
+        )!,
+      );
     }
     if (excludeCampaigned === "true") {
       filters.push(isNull(campaigns.id));
