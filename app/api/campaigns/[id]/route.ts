@@ -9,6 +9,7 @@ import {
   campaignBusinesses,
   campaigns,
   leads,
+  proposals,
   searchBusinesses,
   searches,
 } from "@/lib/db/schema";
@@ -88,6 +89,8 @@ export async function GET(request: Request, context: RouteContext) {
         leadId: leads.id,
         leadPlaceId: leads.placeId,
         leadHasWhatsapp: leads.hasWhatsapp,
+        proposalId: proposals.id,
+        proposalDemoUrl: proposals.demoUrl,
       })
       .from(campaignBusinesses)
       .innerJoin(
@@ -96,6 +99,7 @@ export async function GET(request: Request, context: RouteContext) {
       )
       .innerJoin(searches, eq(searchBusinesses.searchId, searches.id))
       .leftJoin(leads, eq(leads.searchBusinessId, searchBusinesses.id))
+      .leftJoin(proposals, eq(proposals.leadId, leads.id))
       .where(eq(campaignBusinesses.campaignId, id))
       .orderBy(searchBusinesses.createdAt);
 
@@ -139,6 +143,8 @@ export async function GET(request: Request, context: RouteContext) {
         leadId: row.leadId,
         leadPlaceId: row.leadPlaceId,
         hasWhatsapp: row.leadHasWhatsapp,
+        hasProposal: row.proposalId != null,
+        demoUrl: row.proposalDemoUrl,
       })),
     });
   } catch (error) {

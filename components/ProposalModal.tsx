@@ -177,40 +177,24 @@ export function ProposalModal({
     };
   }, [open, searchId]);
 
-  useEffect(() => {
-    if (!open) return;
+  const generateBody = useCallback(
+    async (signal: { cancelled: boolean }) => {
+      setTemplateLoading(true);
+      setAutoSavedDraft(false);
 
-    if (proposal?.body) {
-      setBody(proposal.body);
-      setTemplateLoading(false);
-      setAutoSavedDraft(true);
-      return;
-    }
-
-    if (mode !== "create") {
-      setBody(initialBody);
-      setTemplateLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setTemplateLoading(true);
-    setBody("");
-    setAutoSavedDraft(false);
-
-    Promise.all([
-      fetch(`/api/leads/${leadId}/competitors?includeStats=true&refreshStats=true`),
-      fetch(`/api/searches/${searchId}/settings/proposal-template`, {
-        cache: "no-store",
-      }),
-    ])
-      .then(async ([competitorsRes, templateRes]) => {
+      try {
+        const [competitorsRes, templateRes] = await Promise.all([
+          fetch(`/api/leads/${leadId}/competitors?includeStats=true&refreshStats=true`),
+          fetch(`/api/searches/${searchId}/settings/proposal-template`, {
+            cache: "no-store",
+          }),
+        ]);
         const competitorsData = await competitorsRes.json();
         const templateData = templateRes.ok
           ? ((await templateRes.json()) as SearchSettingsResponse)
           : null;
 
-        if (cancelled) return;
+        if (signal.cancelled) return;
 
         if (templateData) {
           setSearchSettings(templateData);
@@ -219,6 +203,10 @@ export function ProposalModal({
         let competitors: CompetitorWithStats[] = [];
         if (competitorsRes.ok) {
           competitors = competitorsData.competitors ?? [];
+        } else {
+          console.error(
+            `[ProposalModal] Failed to load competitor stats for lead ${leadId}: ${competitorsData?.error ?? competitorsRes.status}`,
+          );
         }
 
         const template =
@@ -235,9 +223,8 @@ export function ProposalModal({
             customTemplate: template,
           }),
         );
-      })
-      .catch(() => {
-        if (!cancelled) {
+      } catch {
+        if (!signal.cancelled) {
           setBody(
             buildProposalTemplate({
               businessName,
@@ -249,26 +236,42 @@ export function ProposalModal({
             }),
           );
         }
-      })
-      .finally(() => {
-        if (!cancelled) setTemplateLoading(false);
-      });
+      } finally {
+        if (!signal.cancelled) setTemplateLoading(false);
+      }
+    },
+    [leadId, searchId, businessName, industry, location, senderName, proposal?.demoUrl],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (proposal?.body) {
+      setBody(proposal.body);
+      setTemplateLoading(false);
+      setAutoSavedDraft(true);
+      return;
+    }
+
+    if (mode !== "create") {
+      setBody(initialBody);
+      setTemplateLoading(false);
+      return;
+    }
+
+    const signal = { cancelled: false };
+    setBody("");
+    void generateBody(signal);
 
     return () => {
-      cancelled = true;
+      signal.cancelled = true;
     };
   }, [
     open,
     mode,
-    leadId,
-    searchId,
     proposal,
-    businessName,
-    industry,
-    location,
     initialBody,
-    senderName,
-    proposal?.demoUrl,
+    generateBody,
   ]);
 
   useEffect(() => {
@@ -484,6 +487,17 @@ export function ProposalModal({
           >
             Close
           </button>
+          {!readOnly && (
+            <button
+              type="button"
+              disabled={templateLoading || demoCreating}
+              onClick={() => void generateBody({ cancelled: false })}
+              title="Regenerate this proposal's message"
+              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:text-zinc-300"
+            >
+              {templateLoading ? "Regenerating…" : "Regenerate"}
+            </button>
+          )}
           {!readOnly && searchSettings?.demoEnabled && (
             <button
               type="button"

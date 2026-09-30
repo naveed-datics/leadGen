@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { WhatsAppConnectionCard } from "@/components/WhatsAppConnectionCard";
 import { DemoWebhookCard } from "@/components/DemoWebhookCard";
+import { ProposalTemplateCard } from "@/components/ProposalTemplateCard";
 import { FacebookExtensionCard } from "@/components/FacebookExtensionCard";
 import type { SearchDataSource } from "@/lib/types";
 
@@ -163,6 +164,8 @@ export default function AgentSettingsPage() {
       <FacebookExtensionCard />
 
       <DemoWebhookCard />
+
+      <ProposalTemplateCard />
 
       <form onSubmit={save} className="mt-6 space-y-6">
         <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

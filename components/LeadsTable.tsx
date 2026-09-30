@@ -321,16 +321,20 @@ function ProposalAction({
   onView: (lead: LeadWithProposal) => void;
   onCreateDemo: (lead: LeadWithProposal) => void;
 }) {
+  // No proposal yet: only "Create proposal" is offered — Create Demo stays
+  // hidden until a proposal exists for this lead.
   if (!lead.proposal) {
     return (
       <div className="flex justify-end gap-2">
-        <CreateDemoLink
-          lead={lead}
-          creatingDemo={creatingDemo}
-          canCreateDemo={canCreateDemo}
-          now={now}
-          onCreateDemo={onCreateDemo}
-        />
+        <button
+          type="button"
+          onClick={() => onCreate(lead)}
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+          title="Create proposal"
+        >
+          <PlusIcon />
+          Create proposal
+        </button>
       </div>
     );
   }
@@ -339,18 +343,7 @@ function ProposalAction({
     return (
       <div className="flex justify-end gap-2">
         {lead.proposal.demoUrl ? (
-          <>
-            <ViewDemoButton demoUrl={lead.proposal.demoUrl} />
-            <button
-              type="button"
-              onClick={() => onCreate(lead)}
-              className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-              title="Create proposal"
-            >
-              <PlusIcon />
-              Create proposal
-            </button>
-          </>
+          <ViewDemoButton demoUrl={lead.proposal.demoUrl} />
         ) : (
           <CreateDemoLink
             lead={lead}
@@ -360,6 +353,15 @@ function ProposalAction({
             onCreateDemo={onCreateDemo}
           />
         )}
+        <button
+          type="button"
+          onClick={() => onCreate(lead)}
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+          title="Create proposal"
+        >
+          <PlusIcon />
+          Create proposal
+        </button>
       </div>
     );
   }
@@ -400,7 +402,17 @@ function ProposalAction({
 
   return (
     <div className="flex justify-end gap-2">
-      {lead.proposal.demoUrl && <ViewDemoButton demoUrl={lead.proposal.demoUrl} />}
+      {lead.proposal.demoUrl ? (
+        <ViewDemoButton demoUrl={lead.proposal.demoUrl} />
+      ) : (
+        <CreateDemoLink
+          lead={lead}
+          creatingDemo={creatingDemo}
+          canCreateDemo={canCreateDemo}
+          now={now}
+          onCreateDemo={onCreateDemo}
+        />
+      )}
       <button
         type="button"
         onClick={() => onEdit(lead)}

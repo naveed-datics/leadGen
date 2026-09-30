@@ -6,7 +6,7 @@
 const OVERALL_TIMEOUT_MS = 260_000; // 260s, ~40s headroom under maxDuration
 const POST_TIMEOUT_MS = 60_000;
 const POLL_INTERVAL_MS = 2_500;
-// One tick can include an Azure OpenAI call + Elementor write — allow headroom.
+// One tick can include an LLM call + Elementor write — allow headroom.
 const POLL_REQUEST_TIMEOUT_MS = 60_000;
 
 export class DemoWebhookError extends Error {

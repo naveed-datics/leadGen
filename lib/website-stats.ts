@@ -4,7 +4,7 @@ import {
   fetchApifyWebsiteStats,
   isApifyConfigured,
 } from "@/lib/apify-traffic";
-import { estimateWebsiteStats, getAzureOpenAIConfig } from "@/lib/azure-openai";
+import { estimateWebsiteStats, getLLMConfig } from "@/lib/llm";
 import { getDb } from "@/lib/db/index";
 import { websiteStatsCache } from "@/lib/db/schema";
 import type { WebsiteStats, WebsiteStatsSource } from "@/lib/types";
@@ -250,18 +250,18 @@ export async function getWebsiteStats(
   const domain = extractDomain(url);
 
   let apifyPartial: Partial<WebsiteStats> = {};
-  let apifyActorNotRented = false;
   if (apifyConfigured) {
     try {
       apifyPartial = await fetchApifyWebsiteStats(url);
     } catch (error) {
       if (error instanceof ApifyActorNotRentedError) {
-        apifyActorNotRented = true;
+        console.error(`[website-stats] Apify actor not rented for ${url}`);
       } else {
+        const message = error instanceof Error ? error.message : "Apify request failed";
+        console.error(`[website-stats] Apify traffic fetch failed for ${url}: ${message}`);
         apifyPartial = {
           source: "apify",
-          trafficError:
-            error instanceof Error ? error.message : "Apify request failed",
+          trafficError: message,
         };
       }
     }
@@ -291,12 +291,14 @@ export async function getWebsiteStats(
     !apifyPartial.lastUpdated && !measured.lastUpdated;
 
   let aiPartial: Partial<WebsiteStats> = {};
-  const useAiForTraffic =
-    needsTraffic && (!apifyConfigured || apifyActorNotRented);
-  const needsAi =
-    (useAiForTraffic && needsTraffic) || needsAge || needsUpdated;
+  // Fall back to an AI traffic estimate whenever Apify didn't give us a
+  // usable number — whether that's because it's unconfigured/unrented, or
+  // because it responded successfully but with zero/empty data (the common
+  // case for small local-business sites with negligible measured traffic).
+  const useAiForTraffic = needsTraffic;
+  const needsAi = useAiForTraffic || needsAge || needsUpdated;
 
-  if (needsAi && getAzureOpenAIConfig()) {
+  if (needsAi && getLLMConfig()) {
     try {
       const aiStats = await estimateWebsiteStats(url, {
         domainAge: apifyPartial.websiteAge ?? domainAge,
@@ -312,9 +314,12 @@ export async function getWebsiteStats(
           lastUpdated: aiStats.lastUpdated,
         };
       }
-    } catch {
-      // Continue with available data
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI stats estimate failed";
+      console.error(`[website-stats] AI fallback failed for ${url}: ${message}`);
     }
+  } else if (needsAi) {
+    console.error(`[website-stats] AI fallback needed for ${url} but LLM is not configured`);
   }
 
   const stats = mergeStats(

@@ -6,6 +6,32 @@ import { useCallback, useEffect, useState } from "react";
 import { ProposalModal } from "@/components/ProposalModal";
 import type { ProposalSummary } from "@/lib/types";
 
+function WhatsappIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+      <path d="M12.004 2c-5.514 0-9.997 4.483-9.997 9.997 0 1.763.464 3.482 1.345 4.997L2 22l5.146-1.35a9.96 9.96 0 0 0 4.858 1.238h.004c5.513 0 9.996-4.483 9.996-9.997C21.996 6.483 17.518 2 12.004 2zm0 18.176a8.16 8.16 0 0 1-4.166-1.14l-.299-.177-3.055.801.816-2.978-.194-.306a8.146 8.146 0 0 1-1.257-4.383c0-4.508 3.669-8.176 8.163-8.176 4.494 0 8.163 3.668 8.163 8.176 0 4.508-3.669 8.183-8.171 8.183z" />
+    </svg>
+  );
+}
+
+function CallIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  );
+}
+
 type CampaignStatus = "draft" | "active" | "completed" | "archived";
 
 type CampaignBusiness = {
@@ -32,6 +58,8 @@ type CampaignBusiness = {
   leadId: string | null;
   leadPlaceId: string | null;
   hasWhatsapp: boolean | null;
+  hasProposal: boolean;
+  demoUrl: string | null;
 };
 
 type CampaignResults = {
@@ -109,6 +137,10 @@ export default function CampaignDetailPage() {
 
   const [creatingDemoId, setCreatingDemoId] = useState<string | null>(null);
   const [demoToast, setDemoToast] = useState<string | null>(null);
+  const [deletingDemoId, setDeletingDemoId] = useState<string | null>(null);
+  const [demoDeleteTarget, setDemoDeleteTarget] = useState<CampaignBusiness | null>(
+    null,
+  );
 
   const [proposalModalOpen, setProposalModalOpen] = useState(false);
   const [proposalBusiness, setProposalBusiness] = useState<CampaignBusiness | null>(
@@ -116,6 +148,11 @@ export default function CampaignDetailPage() {
   );
   const [proposalLeadId, setProposalLeadId] = useState<string | null>(null);
   const [proposalSaving, setProposalSaving] = useState(false);
+  const [proposalMode, setProposalMode] = useState<"create" | "edit">("create");
+  const [proposalSummary, setProposalSummary] = useState<ProposalSummary | null>(
+    null,
+  );
+  const [proposalLoading, setProposalLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -195,13 +232,70 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function handleDeleteDemo() {
+    if (!demoDeleteTarget?.leadId) return;
+    setDeletingDemoId(demoDeleteTarget.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/leads/${demoDeleteTarget.leadId}/demo`, {
+        method: "DELETE",
+      });
+      const data = (await res.json()) as { error?: string; wpDeleteWarning?: string | null };
+      if (!res.ok) {
+        setError(data.error ?? "Failed to delete demo");
+        return;
+      }
+      if (data.wpDeleteWarning) {
+        setError(data.wpDeleteWarning);
+      }
+      setDemoDeleteTarget(null);
+      await load();
+    } catch {
+      setError("Network error while deleting demo");
+    } finally {
+      setDeletingDemoId(null);
+    }
+  }
+
   async function handleOpenProposal(business: CampaignBusiness) {
     setError(null);
     const leadId = await ensureLead(business);
     if (!leadId) return;
-    setProposalBusiness(business);
-    setProposalLeadId(leadId);
-    setProposalModalOpen(true);
+
+    if (!business.hasProposal) {
+      // Resolve everything before mounting/opening the modal, so it never
+      // renders with a previous business's stale proposal/leadId.
+      setProposalMode("create");
+      setProposalSummary(null);
+      setProposalBusiness(business);
+      setProposalLeadId(leadId);
+      setProposalModalOpen(true);
+      return;
+    }
+
+    setProposalLoading(true);
+    try {
+      const res = await fetch(`/api/leads/${leadId}/proposal`, {
+        cache: "no-store",
+      });
+      const data = (await res.json()) as {
+        proposal?: ProposalSummary;
+        error?: string;
+      };
+      if (!res.ok || !data.proposal) {
+        setError(data.error ?? "Failed to load proposal");
+        return;
+      }
+      setProposalMode("edit");
+      setProposalSummary(data.proposal);
+      setProposalBusiness(business);
+      setProposalLeadId(leadId);
+      setProposalModalOpen(true);
+    } catch {
+      setError("Network error while loading proposal");
+    } finally {
+      setProposalLoading(false);
+    }
   }
 
   async function handleSaveProposal(body: string): Promise<ProposalSummary> {
@@ -215,6 +309,7 @@ export default function CampaignDetailPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
+      setProposalSummary(data.proposal as ProposalSummary);
       await load();
       return data.proposal as ProposalSummary;
     } finally {
@@ -395,14 +490,18 @@ export default function CampaignDetailPage() {
               </button>
             </>
           )}
-          <button
-            type="button"
-            onClick={() => void exportCsv()}
-            disabled={exporting}
-            className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-60"
-          >
-            {exporting ? "Exporting…" : "Export CSV"}
-          </button>
+          {/* Export CSV hidden from the UI for now — exportCsv() is kept so
+              it can be re-enabled by restoring this button. */}
+          {false && (
+            <button
+              type="button"
+              onClick={() => void exportCsv()}
+              disabled={exporting}
+              className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-60"
+            >
+              {exporting ? "Exporting…" : "Export CSV"}
+            </button>
+          )}
         </div>
       </header>
 
@@ -526,8 +625,36 @@ export default function CampaignDetailPage() {
                       <span className="text-zinc-400">—</span>
                     )}
                   </td>
-                  <td className="truncate px-3 py-3 align-top text-zinc-700 dark:text-zinc-300">
-                    {business.phone ?? "—"}
+                  <td className="px-3 py-3 align-top">
+                    <div className="flex items-center gap-1.5">
+                      {business.phone ? (
+                        business.hasWhatsapp ? (
+                          <a
+                            href={`https://wa.me/${business.phone.replace(/[^0-9]/g, "")}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Message on WhatsApp"
+                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+                          >
+                            <WhatsappIcon className="h-4 w-4" />
+                          </a>
+                        ) : (
+                          <a
+                            href={`tel:${business.phone}`}
+                            title="Call"
+                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-sky-600 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-950/40"
+                          >
+                            <CallIcon className="h-4 w-4" />
+                          </a>
+                        )
+                      ) : null}
+                      <span
+                        className="truncate text-zinc-700 dark:text-zinc-300"
+                        title={business.phone ?? undefined}
+                      >
+                        {business.phone ?? "—"}
+                      </span>
+                    </div>
                   </td>
                   <td className="truncate px-3 py-3 align-top text-zinc-700 dark:text-zinc-300">
                     {business.website ? (
@@ -539,7 +666,9 @@ export default function CampaignDetailPage() {
                   {!isTerminal && (
                     <td className="px-3 py-3 align-top">
                       <div className="flex flex-wrap gap-1.5">
-                        {business.demoEnabled && (
+                        {/* Create Demo stays hidden until a proposal exists
+                            for this business — proposal comes first. */}
+                        {business.demoEnabled && business.hasProposal && (
                           <button
                             type="button"
                             onClick={() => void handleCreateDemo(business)}
@@ -548,15 +677,28 @@ export default function CampaignDetailPage() {
                           >
                             {creatingDemoId === business.id
                               ? "Creating…"
-                              : "Create Demo"}
+                              : business.demoUrl
+                                ? "Recreate Demo"
+                                : "Create Demo"}
+                          </button>
+                        )}
+                        {business.demoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setDemoDeleteTarget(business)}
+                            disabled={deletingDemoId === business.id}
+                            className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60 dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/40"
+                          >
+                            {deletingDemoId === business.id ? "Deleting…" : "Delete Demo"}
                           </button>
                         )}
                         <button
                           type="button"
                           onClick={() => void handleOpenProposal(business)}
-                          className="rounded-lg border border-emerald-300 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                          disabled={proposalLoading}
+                          className="rounded-lg border border-emerald-300 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
                         >
-                          Create Proposal
+                          {business.hasProposal ? "View Proposal" : "Create Proposal"}
                         </button>
                       </div>
                     </td>
@@ -570,8 +712,9 @@ export default function CampaignDetailPage() {
 
       {proposalBusiness && proposalLeadId && (
         <ProposalModal
+          key={`${proposalLeadId}:${proposalMode}`}
           open={proposalModalOpen}
-          mode="create"
+          mode={proposalMode}
           searchId={proposalBusiness.searchId}
           leadId={proposalLeadId}
           businessName={proposalBusiness.title}
@@ -580,8 +723,8 @@ export default function CampaignDetailPage() {
           leadPhone={proposalBusiness.phone}
           hasWhatsapp={proposalBusiness.hasWhatsapp}
           whatsappConfigured={false}
-          initialBody=""
-          proposal={null}
+          initialBody={proposalSummary?.body ?? ""}
+          proposal={proposalSummary}
           saving={proposalSaving}
           onClose={() => setProposalModalOpen(false)}
           onSave={handleSaveProposal}
@@ -652,6 +795,41 @@ export default function CampaignDetailPage() {
                 className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
               >
                 {deleting ? "Deleting…" : "Delete campaign"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {demoDeleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              Delete demo?
+            </h2>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              This permanently deletes the demo site for{" "}
+              <span className="font-medium text-zinc-900 dark:text-zinc-200">
+                {demoDeleteTarget.title}
+              </span>
+              , including the live WordPress site. This action cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDemoDeleteTarget(null)}
+                disabled={deletingDemoId === demoDeleteTarget.id}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteDemo()}
+                disabled={deletingDemoId === demoDeleteTarget.id}
+                className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deletingDemoId === demoDeleteTarget.id ? "Deleting…" : "Delete demo"}
               </button>
             </div>
           </div>

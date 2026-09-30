@@ -1,10 +1,14 @@
 import type { WebsiteStats } from "@/lib/types";
 
-export interface AzureOpenAIConfig {
+export interface LLMProvider {
   apiKey: string;
-  endpoint: string;
-  deployment: string;
-  apiVersion: string;
+  baseUrl: string;
+  /** Tried in order until one succeeds. */
+  models: string[];
+}
+
+export interface LLMConfig extends LLMProvider {
+  fallback: LLMProvider | null;
 }
 
 export interface CompetitorCandidate {
@@ -28,34 +32,59 @@ export interface CompetitorTarget {
   searchIndustry: string;
 }
 
-export function getAzureOpenAIConfig(): AzureOpenAIConfig | null {
-  const apiKey = process.env.AZURE_OPENAI_API_KEY;
-  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
-  const apiVersion = process.env.AZURE_OPENAI_API_VERSION;
+const DEFAULT_LLM_BASE_URL =
+  "https://generativelanguage.googleapis.com/v1beta/openai";
+const DEFAULT_LLM_MODELS = "gemini-3.5-flash-lite,gemini-3.5-flash";
+const DEFAULT_FALLBACK_BASE_URL = "https://openrouter.ai/api/v1";
+const DEFAULT_FALLBACK_MODELS =
+  "google/gemma-4-31b-it:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-26b-a4b-it:free";
 
-  if (!apiKey || !endpoint || !deployment || !apiVersion) {
-    return null;
-  }
-
-  return { apiKey, endpoint, deployment, apiVersion };
+function parseModels(value: string): string[] {
+  return value
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
 }
 
-async function chatCompletion(
-  config: AzureOpenAIConfig,
+export function getLLMConfig(): LLMConfig | null {
+  const apiKey = process.env.LLM_API_KEY;
+  if (!apiKey) return null;
+
+  const fallbackKey = process.env.LLM_FALLBACK_API_KEY;
+
+  return {
+    apiKey,
+    baseUrl: process.env.LLM_BASE_URL || DEFAULT_LLM_BASE_URL,
+    models: parseModels(process.env.LLM_MODEL || DEFAULT_LLM_MODELS),
+    fallback: fallbackKey
+      ? {
+          apiKey: fallbackKey,
+          baseUrl:
+            process.env.LLM_FALLBACK_BASE_URL || DEFAULT_FALLBACK_BASE_URL,
+          models: parseModels(
+            process.env.LLM_FALLBACK_MODEL || DEFAULT_FALLBACK_MODELS,
+          ),
+        }
+      : null,
+  };
+}
+
+async function requestCompletion(
+  provider: LLMProvider,
+  model: string,
   system: string,
   user: string,
 ): Promise<string> {
-  const base = config.endpoint.replace(/\/$/, "");
-  const url = `${base}/openai/deployments/${config.deployment}/chat/completions?api-version=${encodeURIComponent(config.apiVersion)}`;
+  const url = `${provider.baseUrl.replace(/\/$/, "")}/chat/completions`;
 
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "api-key": config.apiKey,
+      Authorization: `Bearer ${provider.apiKey}`,
     },
     body: JSON.stringify({
+      model,
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -67,7 +96,7 @@ async function chatCompletion(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Azure OpenAI error ${response.status}: ${text}`);
+    throw new Error(`LLM error ${response.status} (${model}): ${text}`);
   }
 
   const data = (await response.json()) as {
@@ -75,9 +104,31 @@ async function chatCompletion(
   };
   const content = data.choices?.[0]?.message?.content;
   if (!content) {
-    throw new Error("Azure OpenAI returned empty response");
+    throw new Error(`LLM returned empty response (${model})`);
   }
   return content;
+}
+
+async function chatCompletion(
+  config: LLMConfig,
+  system: string,
+  user: string,
+): Promise<string> {
+  const attempts = [config, config.fallback].flatMap((provider) =>
+    provider ? provider.models.map((model) => ({ provider, model })) : [],
+  );
+
+  const errors: string[] = [];
+  for (const { provider, model } of attempts) {
+    try {
+      return await requestCompletion(provider, model, system, user);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[llm] ${model} failed, trying next: ${message}`);
+      errors.push(message);
+    }
+  }
+  throw new Error(`All LLM models failed:\n${errors.join("\n")}`);
 }
 
 function parseJson<T>(raw: string): T {
@@ -89,28 +140,31 @@ function parseJson<T>(raw: string): T {
   return JSON.parse(jsonMatch[0]) as T;
 }
 
+// Over-pick so the proposal still has 3 after zero-traffic sites are dropped.
+const MAX_COMPETITOR_PICKS = 5;
+
 export async function pickNearestCompetitors(
   target: CompetitorTarget,
   candidates: CompetitorCandidate[],
-  config?: AzureOpenAIConfig | null,
+  config?: LLMConfig | null,
 ): Promise<string[]> {
-  const cfg = config ?? getAzureOpenAIConfig();
+  const cfg = config ?? getLLMConfig();
   if (!cfg) {
-    throw new Error("Azure OpenAI is not configured");
+    throw new Error("LLM is not configured");
   }
 
   if (candidates.length === 0) return [];
 
   const system = `You rank local business competitors by geographic proximity.
 Return ONLY valid JSON: { "competitorIds": string[] }
-Pick up to 3 competitor IDs from the candidates list, ordered nearest first.
+Pick up to 5 competitor IDs from the candidates list, ordered nearest first.
 Rules:
 - Only use IDs from the candidates list; never invent businesses
 - Prefer same city/area as the target and search location
 - Use addresses and coordinates for proximity
 - Candidates must have a website (already filtered)
 - Exclude the target business if it appears in candidates
-- If fewer than 3 valid candidates exist, return fewer IDs`;
+- If fewer than 5 valid candidates exist, return fewer IDs`;
 
   const user = JSON.stringify({
     target,
@@ -130,7 +184,7 @@ Rules:
   const parsed = parseJson<{ competitorIds?: string[] }>(raw);
   const validIds = new Set(candidates.map((c) => c.id));
   const ids = (parsed.competitorIds ?? []).filter((id) => validIds.has(id));
-  return ids.slice(0, 3);
+  return ids.slice(0, MAX_COMPETITOR_PICKS);
 }
 
 export interface WebsiteStatsHints {
@@ -143,11 +197,11 @@ export interface WebsiteStatsHints {
 export async function estimateWebsiteStats(
   url: string,
   hints: WebsiteStatsHints,
-  config?: AzureOpenAIConfig | null,
+  config?: LLMConfig | null,
 ): Promise<WebsiteStats> {
-  const cfg = config ?? getAzureOpenAIConfig();
+  const cfg = config ?? getLLMConfig();
   if (!cfg) {
-    throw new Error("Azure OpenAI is not configured");
+    throw new Error("LLM is not configured");
   }
 
   const system = `You estimate website analytics when measured data is incomplete.

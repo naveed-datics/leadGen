@@ -1340,7 +1340,9 @@ export default function BusinessesPage() {
             {fbQueueingId === "page" ? "Queueing…" : "Queue this page on Facebook"}
           </button>
         )}
-        {hasActiveFilters && (
+        {/* Export CSV hidden from the UI for now — exportCsv() is kept so
+            it can be re-enabled by restoring this button. */}
+        {false && hasActiveFilters && (
           <button
             type="button"
             onClick={() => void exportCsv()}

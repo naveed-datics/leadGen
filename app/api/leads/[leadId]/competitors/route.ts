@@ -1,10 +1,10 @@
 import { and, eq, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import {
-  getAzureOpenAIConfig,
+  getLLMConfig,
   pickNearestCompetitors,
   type CompetitorCandidate,
-} from "@/lib/azure-openai";
+} from "@/lib/llm";
 import { getDb } from "@/lib/db/index";
 import {
   leadCompetitorPicks,
@@ -121,12 +121,12 @@ export async function GET(
     }
 
     if (competitorIds.length === 0) {
-      const azureConfig = getAzureOpenAIConfig();
-      if (!azureConfig) {
+      const llmConfig = getLLMConfig();
+      if (!llmConfig) {
         return NextResponse.json(
           {
             error:
-              "Azure OpenAI is not configured. Add AZURE_OPENAI_* variables to .env.local",
+              "LLM is not configured. Add LLM_API_KEY to .env.local",
           },
           { status: 503 },
         );
@@ -156,7 +156,7 @@ export async function GET(
           searchIndustry,
         },
         aiCandidates,
-        azureConfig,
+        llmConfig,
       );
       pickSource = "ai";
 
@@ -219,6 +219,7 @@ export async function GET(
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to load competitors";
+    console.error(`[competitors] Failed for lead ${leadId}: ${message}`);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

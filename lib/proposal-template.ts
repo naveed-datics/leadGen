@@ -20,35 +20,51 @@ export const PROPOSAL_PLACEHOLDERS = [
   "{{demoUrl}}",
 ] as const;
 
-export const DEFAULT_PROPOSAL_TEMPLATE = `Hi, this is {{senderName}} — I help local {{industry}} in {{location}} get found online.
+export const DEFAULT_PROPOSAL_TEMPLATE = `Hi, this is {{senderName}}.
 
-I noticed {{businessName}} doesn't have a website yet, even though your Google reviews are great. That's leaving business on the table, since most people check for a website before calling.
+I noticed {{businessName}} doesn't have a website right now.
 {{competitorBlock}}
-So I put together a free demo site for you already — no cost, no obligation, just take a look and see what you think:
+Reply and I'll get a free working demo of your website set up — no payment required.`;
 
-{{demoUrl}}
+const MAX_COMPETITORS_IN_PROPOSAL = 3;
 
-If you like the direction, I can have it live and customized with your branding this week. What do you think — worth a quick chat?`;
-
+/** Website name + monthly visitors + last-updated only — no other stats. */
 function formatStatsLine(stats: CompetitorWithStats["stats"]): string | null {
   const parts: string[] = [];
 
-  const traffic =
-    stats.trafficLabel && stats.trafficEstimate
-      ? `${stats.trafficLabel} (${stats.trafficEstimate})`
-      : stats.trafficLabel ?? stats.trafficEstimate;
-  if (traffic) parts.push(`Traffic: ${traffic}`);
-
-  if (stats.lastUpdated) parts.push(`Updated ${stats.lastUpdated}`);
+  if (stats.trafficEstimate) {
+    const visitors = stats.trafficEstimate.replace(/\s*visits?\s*\/\s*mo(?:nth)?\b/i, "").trim();
+    parts.push(`${visitors} monthly visitors`);
+  }
+  if (stats.lastUpdated) parts.push(`updated ${stats.lastUpdated}`);
 
   return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** Drops query string and hash (utm params, tracking ids) from a URL. */
+function stripQueryParams(url: string): string {
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed);
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return trimmed.split(/[?#]/)[0];
+  }
+}
+
+/** True when the traffic estimate is an explicit zero (e.g. "0 visits/mo"). */
+function hasZeroTraffic(stats: CompetitorWithStats["stats"]): boolean {
+  const match = stats.trafficEstimate?.match(/\d[\d,]*(?:\.\d+)?/);
+  return match ? Number(match[0].replace(/,/g, "")) === 0 : false;
 }
 
 function formatCompetitorSection(competitors: CompetitorWithStats[]): string {
   const lines = competitors.map((c) => {
     const statsLine = formatStatsLine(c.stats);
-    const base = `- *${c.title}* — ${c.website}`;
-    return statsLine ? `${base}\n  ${statsLine}` : base;
+    const base = `- ${stripQueryParams(c.website)}`;
+    return statsLine ? `${base} — ${statsLine}` : base;
   });
 
   return `${lines.join("\n")}\n`;
@@ -61,11 +77,12 @@ function buildCompetitorBlock(
   const competitorsForStats = competitors
     .filter((c) => c.website?.trim())
     .filter((c) => !isSocialWebsiteUrl(c.website))
-    .slice(0, 3);
+    .filter((c) => !hasZeroTraffic(c.stats))
+    .slice(0, MAX_COMPETITORS_IN_PROPOSAL);
 
   if (competitorsForStats.length === 0) return "";
 
-  return `\nA couple of nearby ${industry.toLowerCase()} are already online, for reference:\n\n${formatCompetitorSection(competitorsForStats)}`;
+  return `\nA couple of nearby ${industry.toLowerCase()} are already online:\n\n${formatCompetitorSection(competitorsForStats)}`;
 }
 
 function applyPlaceholders(

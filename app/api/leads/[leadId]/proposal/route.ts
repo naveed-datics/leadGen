@@ -7,6 +7,40 @@ import {
   PROPOSAL_STATUS_IN_PROGRESS,
 } from "@/lib/proposal-status";
 
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ leadId: string }> },
+) {
+  const { leadId } = await params;
+
+  if (!process.env.DATABASE_URL) {
+    return NextResponse.json(
+      { error: "Database is not configured" },
+      { status: 500 },
+    );
+  }
+
+  try {
+    const db = getDb();
+
+    const [proposal] = await db
+      .select()
+      .from(proposals)
+      .where(eq(proposals.leadId, leadId))
+      .limit(1);
+
+    if (!proposal) {
+      return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ proposal: serializeProposal(proposal) });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to load proposal";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ leadId: string }> },
