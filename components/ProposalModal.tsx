@@ -74,7 +74,6 @@ export function ProposalModal({
   );
   const [demoCreating, setDemoCreating] = useState(false);
   const [demoError, setDemoError] = useState<string | null>(null);
-  const autoDemoAttempted = useRef(false);
   const autoSaveInFlight = useRef(false);
   const autoSaveRequestId = useRef(0);
   const onSaveRef = useRef(onSave);
@@ -97,7 +96,6 @@ export function ProposalModal({
 
   useEffect(() => {
     if (!open) {
-      autoDemoAttempted.current = false;
       return;
     }
     setDemoUrl(proposal?.demoUrl ?? null);
@@ -277,27 +275,6 @@ export function ProposalModal({
   useEffect(() => {
     if (!open) return;
     if (mode !== "create") return;
-    if (templateLoading || demoCreating) return;
-    if (proposal?.demoUrl || demoUrl) return;
-    if (!searchSettings?.demoEnabled) return;
-    if (autoDemoAttempted.current) return;
-
-    autoDemoAttempted.current = true;
-    void handleCreateDemo();
-  }, [
-    open,
-    mode,
-    templateLoading,
-    demoCreating,
-    proposal?.demoUrl,
-    demoUrl,
-    searchSettings,
-    handleCreateDemo,
-  ]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (mode !== "create") return;
     if (templateLoading) return;
     if (demoCreating) return;
     if (readOnly) return;
@@ -404,8 +381,8 @@ export function ProposalModal({
           <p role="status" className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
             <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-300 border-t-emerald-500 motion-reduce:hidden" />
             {templateLoading
-              ? "Preparing proposal (1 of 2)..."
-              : "Building demo website (2 of 2)..."}
+              ? "Preparing proposal…"
+              : "Building demo website…"}
           </p>
         )}
 
