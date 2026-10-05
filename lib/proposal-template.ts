@@ -1,5 +1,5 @@
 import type { CompetitorWithStats } from "@/lib/types";
-import { isSocialWebsiteUrl } from "@/lib/social-urls";
+import { isPlatformWebsiteUrl } from "@/lib/platform-urls";
 
 export interface ProposalTemplateInput {
   businessName: string;
@@ -26,7 +26,7 @@ I noticed {{businessName}} doesn't have a website right now.
 {{competitorBlock}}
 Reply and I'll get a free working demo of your website set up — no payment required.`;
 
-const MAX_COMPETITORS_IN_PROPOSAL = 3;
+const MAX_COMPETITORS_IN_PROPOSAL = 2;
 
 /** Website name + monthly visitors + last-updated only — no other stats. */
 function formatStatsLine(stats: CompetitorWithStats["stats"]): string | null {
@@ -76,7 +76,7 @@ function buildCompetitorBlock(
 ): string {
   const competitorsForStats = competitors
     .filter((c) => c.website?.trim())
-    .filter((c) => !isSocialWebsiteUrl(c.website))
+    .filter((c) => !isPlatformWebsiteUrl(c.website))
     .filter((c) => !hasZeroTraffic(c.stats))
     .slice(0, MAX_COMPETITORS_IN_PROPOSAL);
 

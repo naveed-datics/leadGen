@@ -7,6 +7,7 @@ import {
   type CompetitorCandidate,
 } from "@/lib/llm";
 import { getDb } from "@/lib/db/index";
+import { isPlatformWebsiteUrl } from "@/lib/platform-urls";
 import {
   leadCompetitorPicks,
   leads,
@@ -83,10 +84,14 @@ export async function GET(
       candidateConditions.push(ne(searchBusinesses.placeId, lead.placeId));
     }
 
-    const candidates = await db
-      .select()
-      .from(searchBusinesses)
-      .where(and(...candidateConditions));
+    // Only real business websites: no social pages, directories or marketplaces.
+    // Filtering here also covers saved picks, so no Apify run is spent on them.
+    const candidates = (
+      await db
+        .select()
+        .from(searchBusinesses)
+        .where(and(...candidateConditions))
+    ).filter((c) => !isPlatformWebsiteUrl(c.website));
 
     if (candidates.length === 0) {
       const hasAnyBusinesses = await db

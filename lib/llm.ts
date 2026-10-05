@@ -140,8 +140,8 @@ function parseJson<T>(raw: string): T {
   return JSON.parse(jsonMatch[0]) as T;
 }
 
-// Over-pick so the proposal still has 3 after zero-traffic sites are dropped.
-export const MAX_COMPETITOR_PICKS = 3;
+// Each pick costs one billable Apify domain lookup, so keep this small.
+export const MAX_COMPETITOR_PICKS = 2;
 
 export async function pickNearestCompetitors(
   target: CompetitorTarget,
@@ -155,16 +155,16 @@ export async function pickNearestCompetitors(
 
   if (candidates.length === 0) return [];
 
-  const system = `You rank local business competitors by geographic proximity.
+  const system = `You choose the best local competitors for a business.
 Return ONLY valid JSON: { "competitorIds": string[] }
-Pick up to 5 competitor IDs from the candidates list, ordered nearest first.
+Pick up to ${MAX_COMPETITOR_PICKS} competitor IDs from the candidates list, best match first.
 Rules:
 - Only use IDs from the candidates list; never invent businesses
-- Prefer same city/area as the target and search location
-- Use addresses and coordinates for proximity
-- Candidates must have a website (already filtered)
+- Best match = same kind of business as the target (compare type/category and name), then nearest to the target
+- Prefer same city/area as the target and search location; use addresses and coordinates for proximity
+- Only pick businesses whose website is their own business website. Never pick a social network page (Facebook, Instagram, etc.), directory, listing, review site, marketplace or link-in-bio page
 - Exclude the target business if it appears in candidates
-- If fewer than 5 valid candidates exist, return fewer IDs`;
+- If fewer than ${MAX_COMPETITOR_PICKS} valid candidates exist, return fewer IDs`;
 
   const user = JSON.stringify({
     target,
