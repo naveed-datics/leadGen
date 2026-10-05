@@ -18,7 +18,7 @@ import {
 import {
   DEMO_STATUS_BUILDING,
   DEMO_STATUS_FAILED,
-  DEMO_STATUS_READY,
+  DEMO_STATUS_TEMPLATE_READY,
 } from "@/lib/demo-status";
 import {
   buildClaudeJob,
@@ -246,18 +246,22 @@ export async function POST(
       );
     }
 
+    // The clone is only a template until the routine finishes editing it. The
+    // demo URL is published by the claude-demo webhook, so nothing downstream
+    // (follow-ups, lists, View Demo) can use an unfinished site.
     const [saved] = await db
       .update(proposals)
       .set({
-        demoUrl: site.url,
-        demoStatus: DEMO_STATUS_READY,
+        demoUrl: null,
+        demoStatus: DEMO_STATUS_TEMPLATE_READY,
         updatedAt: new Date(),
       })
       .where(eq(proposals.leadId, leadId))
       .returning();
 
     return NextResponse.json({
-      demoUrl: site.url,
+      demoUrl: null,
+      templateUrl: site.url,
       siteId: site.id,
       warning: null,
       proposal: serializeProposal(saved),

@@ -320,7 +320,7 @@ export const proposals = pgTable("proposals", {
   body: text("body").notNull(),
   status: text("status").notNull().default("in_progress"),
   demoUrl: text("demo_url"),
-  demoStatus: text("demo_status").notNull().default("none"), // none | building | ready | failed
+  demoStatus: text("demo_status").notNull().default("none"), // none | building | template_ready | ready | failed
   demoRequestedAt: timestamp("demo_requested_at", { withTimezone: true }),
   wpDemoPageId: integer("wp_demo_page_id"),
   /** demoGen's internal Lead.id (Prisma cuid string) — powers the Edit Demo proxy. */

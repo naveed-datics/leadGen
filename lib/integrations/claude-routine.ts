@@ -69,6 +69,35 @@ export function resolveCallbackBase(requestUrl: string): string {
   return override || new URL(requestUrl).origin;
 }
 
+const ROUTINE_SUCCESS_STATUSES = new Set([
+  "completed",
+  "complete",
+  "done",
+  "success",
+  "succeeded",
+  "ready",
+  "ok",
+  "published",
+]);
+
+const ROUTINE_FAILURE_STATUSES = new Set(["failed", "error"]);
+
+/** True when the routine's callback reports the demo site was finished. */
+export function isRoutineSuccess(status: unknown): boolean {
+  return (
+    typeof status === "string" &&
+    ROUTINE_SUCCESS_STATUSES.has(status.trim().toLowerCase())
+  );
+}
+
+/** True when the routine's callback reports it failed after starting. */
+export function isRoutineFailure(status: unknown): boolean {
+  return (
+    typeof status === "string" &&
+    ROUTINE_FAILURE_STATUSES.has(status.trim().toLowerCase())
+  );
+}
+
 export function signJobId(jobId: string): string {
   return createHmac("sha256", callbackSecret())
     .update(`claude-demo:${jobId}`)

@@ -92,6 +92,7 @@ export async function GET(request: Request, context: RouteContext) {
         leadHasWhatsapp: leads.hasWhatsapp,
         proposalId: proposals.id,
         proposalDemoUrl: proposals.demoUrl,
+        proposalDemoStatus: proposals.demoStatus,
       })
       .from(campaignBusinesses)
       .innerJoin(
@@ -147,6 +148,7 @@ export async function GET(request: Request, context: RouteContext) {
         hasWhatsapp: row.leadHasWhatsapp,
         hasProposal: row.proposalId != null,
         demoUrl: row.proposalDemoUrl,
+        demoStatus: row.proposalDemoStatus ?? "none",
       })),
     });
   } catch (error) {

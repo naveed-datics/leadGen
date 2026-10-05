@@ -33,6 +33,8 @@ function CallIcon({ className }: { className?: string }) {
   );
 }
 
+const DEMO_POLL_INTERVAL_MS = 15_000;
+
 type CampaignStatus = "draft" | "active" | "completed" | "archived";
 
 type CampaignBusiness = {
@@ -61,6 +63,7 @@ type CampaignBusiness = {
   hasWhatsapp: boolean | null;
   hasProposal: boolean;
   demoUrl: string | null;
+  demoStatus: string;
 };
 
 type CampaignResults = {
@@ -184,6 +187,29 @@ export default function CampaignDetailPage() {
     void load();
   }, [load]);
 
+  // While Claude is still finishing a demo, quietly refresh so View Demo
+  // switches on as soon as the routine's webhook publishes the URL.
+  const hasTemplateReady = businesses.some(
+    (business) => business.demoStatus === "template_ready" && !business.demoUrl,
+  );
+  useEffect(() => {
+    if (!hasTemplateReady) return;
+    const timer = setInterval(() => {
+      fetch(`/api/campaigns/${campaignId}`, { cache: "no-store" })
+        .then(async (res) => {
+          if (!res.ok) return;
+          const data = (await res.json()) as CampaignDetailResponse;
+          if ("error" in data) return;
+          setResults(data.results);
+          setBusinesses(data.businesses);
+        })
+        .catch(() => {
+          // Transient network error — the next tick retries.
+        });
+    }, DEMO_POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [hasTemplateReady, campaignId]);
+
   // Which demo backend is active for this user (admins have no agent settings).
   useEffect(() => {
     fetch("/api/agent/settings/claude", { cache: "no-store" })
@@ -251,7 +277,11 @@ export default function CampaignDetailPage() {
         return;
       }
       if (data.warning) setError(data.warning);
-      if (res.status !== 202) {
+      if (provider === "claude") {
+        setDemoToast(
+          `Template for ${business.title} is ready. View Demo turns on when Claude finishes.`,
+        );
+      } else if (res.status !== 202) {
         setDemoToast(`Demo for ${business.title} is ready.`);
       }
       await load();
@@ -717,9 +747,9 @@ export default function CampaignDetailPage() {
                           >
                             {creatingDemoId === business.id
                               ? "Creating…"
-                              : business.demoUrl
-                                ? "Recreate Demo with Claude"
-                                : "Create Demo with Claude"}
+                              : business.demoUrl || business.demoStatus === "template_ready"
+                                ? "Recreate Demo"
+                                : "Create Demo"}
                           </button>
                         )}
                         {!claudeDemoActive && business.demoEnabled && business.hasProposal && (
@@ -736,7 +766,37 @@ export default function CampaignDetailPage() {
                                 : "Create Demo"}
                           </button>
                         )}
+                        {business.demoStatus === "template_ready" && !business.demoUrl && (
+                          <>
+                            <span
+                              className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+                              title="The site is cloned. Claude is still customizing it."
+                            >
+                              Template ready
+                            </span>
+                            <button
+                              type="button"
+                              disabled
+                              aria-disabled="true"
+                              title="Available when Claude finishes the demo"
+                              className="cursor-not-allowed rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-400 dark:border-zinc-800 dark:text-zinc-600"
+                            >
+                              View Demo
+                            </button>
+                          </>
+                        )}
                         {business.demoUrl && (
+                          <a
+                            href={business.demoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Open demo site"
+                            className="rounded-lg border border-emerald-300 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950/40"
+                          >
+                            View Demo
+                          </a>
+                        )}
+                        {(business.demoUrl || business.demoStatus === "template_ready") && (
                           <button
                             type="button"
                             onClick={() => setDemoDeleteTarget(business)}

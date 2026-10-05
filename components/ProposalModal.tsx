@@ -504,7 +504,7 @@ export function ProposalModal({
             >
               {demoCreating
                 ? "Creating demo…"
-                : `${demoUrl ? "Recreate demo" : "Create demo"}${claudeDemoActive ? " with Claude" : ""}`}
+                : demoUrl ? "Recreate demo" : "Create demo"}
             </button>
           )}
           {!readOnly && (

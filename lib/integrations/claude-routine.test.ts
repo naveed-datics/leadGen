@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildClaudeJob,
+  isRoutineFailure,
+  isRoutineSuccess,
   signJobId,
   validateRoutineUrl,
   verifyJobSignature,
@@ -42,4 +44,25 @@ test("buildClaudeJob embeds a signed callback and the demo URL", () => {
   assert.equal(verifyJobSignature("job-1", cb.searchParams.get("sig")!), true);
   assert.equal(job.demo_url, "https://net.example/acme/");
   assert.equal(job.options.dry_run, false);
+});
+
+test("routine completion statuses map to ready", () => {
+  for (const status of ["completed", "DONE", " success ", "ready"]) {
+    assert.equal(isRoutineSuccess(status), true, status);
+    assert.equal(isRoutineFailure(status), false, status);
+  }
+});
+
+test("routine failure statuses are failures, never ready", () => {
+  for (const status of ["failed", "Error"]) {
+    assert.equal(isRoutineFailure(status), true, status);
+    assert.equal(isRoutineSuccess(status), false, status);
+  }
+});
+
+test("unfinished or unknown statuses are neither ready nor failed", () => {
+  for (const status of ["needs_credentials", "", undefined, null, 42]) {
+    assert.equal(isRoutineSuccess(status), false, String(status));
+    assert.equal(isRoutineFailure(status), false, String(status));
+  }
 });
