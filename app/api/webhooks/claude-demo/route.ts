@@ -1,0 +1,70 @@
+import { eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
+import { getDb } from "@/lib/db/index";
+import { getAgentWordPressCredentials } from "@/lib/agent-settings";
+import { leads, proposals, searches } from "@/lib/db/schema";
+import { wpDeleteSite } from "@/lib/integrations/wp-network";
+import { DEMO_STATUS_FAILED } from "@/lib/demo-status";
+import { verifyJobSignature } from "@/lib/integrations/claude-routine";
+
+/**
+ * Public callback the Claude routine POSTs to when it finishes. Authenticated
+ * by the HMAC `sig` in the query string. On failure it deletes the clone; the
+ * demo URL is set once the routine has been triggered.
+ */
+export async function POST(request: Request) {
+  if (!process.env.DATABASE_URL) {
+    return NextResponse.json({ error: "Database is not configured" }, { status: 500 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const jobId = searchParams.get("job")?.trim() || "";
+  const sig = searchParams.get("sig")?.trim() || "";
+  if (!jobId || !sig || !verifyJobSignature(jobId, sig)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = (await request.json().catch(() => null)) as {
+    status?: unknown;
+  } | null;
+
+  const db = getDb();
+  const [proposal] = await db
+    .select({
+      id: proposals.id,
+      wpSiteId: proposals.wpSiteId,
+      agentId: searches.agentId,
+    })
+    .from(proposals)
+    .innerJoin(leads, eq(proposals.leadId, leads.id))
+    .innerJoin(searches, eq(leads.searchId, searches.id))
+    .where(eq(proposals.claudeJobId, jobId))
+    .limit(1);
+  if (!proposal) {
+    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+  }
+
+  if (body?.status === "failed" || body?.status === "error") {
+    // The routine failed after starting: remove the clone and reset the demo.
+    let siteRemoved = proposal.wpSiteId == null;
+    if (proposal.wpSiteId != null && proposal.agentId) {
+      const wp = await getAgentWordPressCredentials(proposal.agentId);
+      if (wp) {
+        siteRemoved = await wpDeleteSite(wp, proposal.wpSiteId)
+          .then(() => true)
+          .catch(() => false);
+      }
+    }
+    await db
+      .update(proposals)
+      .set({
+        demoStatus: DEMO_STATUS_FAILED,
+        demoUrl: null,
+        ...(siteRemoved ? { wpSiteId: null, demoProvider: null } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(proposals.id, proposal.id));
+  }
+
+  return NextResponse.json({ ok: true });
+}

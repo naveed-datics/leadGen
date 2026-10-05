@@ -20,6 +20,8 @@
     "db:migrate:business-contacts-place": "tsx scripts/apply-business-contacts-place-migration.ts",
     "db:migrate:campaigns": "tsx scripts/apply-campaigns-migration.ts",
     "db:migrate:social-outreach": "tsx scripts/apply-social-outreach-migration.ts",
+    "db:migrate:campaign-demo-template": "tsx scripts/apply-campaign-demo-template-migration.ts",
+    "db:migrate:claude-demo": "tsx scripts/apply-claude-demo-migration.ts",
     "db:studio": "drizzle-kit studio",
     "test": "tsx --test lib/**/*.test.ts",
     "cron:follow-ups": "tsx scripts/cron-follow-ups.ts"

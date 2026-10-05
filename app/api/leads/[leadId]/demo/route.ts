@@ -1,6 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { getAgentDemoWebhookConfig, serializeProposal } from "@/lib/agent-settings";
+import {
+  getAgentDemoWebhookConfig,
+  getAgentWordPressCredentials,
+  serializeProposal,
+} from "@/lib/agent-settings";
+import { wpDeleteSite } from "@/lib/integrations/wp-network";
 import { getSearchSettings } from "@/lib/search-proposal-settings";
 import { AuthError, requireActiveAgent, requireAuth } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db/index";
@@ -96,6 +101,9 @@ export async function POST(
         .set({
           demoStatus: DEMO_STATUS_BUILDING,
           demoRequestedAt: new Date(),
+          demoProvider: "demoapp",
+          claudeJobId: null,
+          wpSiteId: null,
           updatedAt: new Date(),
         })
         .where(eq(proposals.id, existingBeforeBuild.id));
@@ -250,6 +258,8 @@ export async function DELETE(
         demoStatus: proposals.demoStatus,
         demoUrl: proposals.demoUrl,
         demoGenLeadId: proposals.demoGenLeadId,
+        demoProvider: proposals.demoProvider,
+        wpSiteId: proposals.wpSiteId,
       })
       .from(leads)
       .innerJoin(searches, eq(leads.searchId, searches.id))
@@ -278,7 +288,21 @@ export async function DELETE(
     }
 
     let wpDeleteWarning: string | null = null;
-    if (row.demoGenLeadId) {
+    if (row.demoProvider === "claude" && row.wpSiteId != null) {
+      const wp = await getAgentWordPressCredentials(user.id);
+      if (!wp) {
+        return NextResponse.json(
+          { error: "WordPress is not configured, so the cloned site cannot be deleted." },
+          { status: 400 },
+        );
+      }
+      try {
+        await wpDeleteSite(wp, row.wpSiteId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to delete the cloned site";
+        return NextResponse.json({ error: message }, { status: 502 });
+      }
+    } else if (row.demoGenLeadId) {
       const webhookConfig = await getAgentDemoWebhookConfig(user.id);
       if (webhookConfig.url && webhookConfig.apiKey) {
         try {
@@ -310,6 +334,9 @@ export async function DELETE(
         demoRequestedAt: null,
         wpDemoPageId: null,
         demoGenLeadId: null,
+        demoProvider: null,
+        claudeJobId: null,
+        wpSiteId: null,
         updatedAt: new Date(),
       })
       .where(eq(proposals.id, row.proposalId));

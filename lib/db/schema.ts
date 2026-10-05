@@ -43,10 +43,19 @@ export const users = pgTable("users", {
   wpBaseUrl: text("wp_base_url"),
   wpUsername: text("wp_username"),
   wpAppPasswordEnc: text("wp_app_password_enc"),
+  /** leadGen WP plugin key (X-LeadGen-API-Key); preferred over the app password for cloning. */
+  wpPluginApiKeyEnc: text("wp_plugin_api_key_enc"),
   defaultDemoPageId: integer("default_demo_page_id"),
   demoWebhookUrl: text("demo_webhook_url"),
   demoWebhookApiKeyEnc: text("demo_webhook_api_key_enc"),
   demoUrlWebhookSecretEnc: text("demo_url_webhook_secret_enc"),
+  claudeRoutineUrl: text("claude_routine_url"),
+  claudeRoutineTokenEnc: text("claude_routine_token_enc"),
+  claudeBetaHeader: text("claude_beta_header"),
+  /** Sent as options.dry_run to the Claude routine. */
+  claudeDryRun: boolean("claude_dry_run").notNull().default(true),
+  /** `demoapp` | `claude` — which backend the agent's "Create Demo" uses. */
+  demoProvider: text("demo_provider").notNull().default("demoapp"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -191,6 +200,8 @@ export const campaigns = pgTable("campaigns", {
   description: text("description"),
   /** "draft" | "active" | "completed" | "archived" — see CAMPAIGN_STATUSES. */
   status: text("status").notNull().default("draft"),
+  /** WP template site (slug) cloned for this campaign's demos. */
+  demoTemplate: text("demo_template"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -314,6 +325,11 @@ export const proposals = pgTable("proposals", {
   wpDemoPageId: integer("wp_demo_page_id"),
   /** demoGen's internal Lead.id (Prisma cuid string) — powers the Edit Demo proxy. */
   demoGenLeadId: text("demo_gen_lead_id"),
+  /** `demoapp` | `claude` — which flow built this demo. */
+  demoProvider: text("demo_provider"),
+  claudeJobId: text("claude_job_id"),
+  /** WP multisite blog id of a site cloned directly via the plugin. */
+  wpSiteId: integer("wp_site_id"),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   readAt: timestamp("read_at", { withTimezone: true }),

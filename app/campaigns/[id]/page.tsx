@@ -1,5 +1,6 @@
 "use client";
 
+import { CampaignSettingsModal } from "@/components/CampaignSettingsModal";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -78,6 +79,7 @@ type CampaignMeta = {
   name: string;
   description: string | null;
   status: CampaignStatus;
+  demoTemplate?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -153,6 +155,8 @@ export default function CampaignDetailPage() {
     null,
   );
   const [proposalLoading, setProposalLoading] = useState(false);
+  const [claudeDemoActive, setClaudeDemoActive] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -180,6 +184,24 @@ export default function CampaignDetailPage() {
     void load();
   }, [load]);
 
+  // Which demo backend is active for this user (admins have no agent settings).
+  useEffect(() => {
+    fetch("/api/agent/settings/claude", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          claudeConfigured?: boolean;
+          demoProvider?: string;
+        };
+        setClaudeDemoActive(
+          Boolean(data.claudeConfigured) && data.demoProvider === "claude",
+        );
+      })
+      .catch(() => {
+        // Settings are optional here; fall back to the demo app flow.
+      });
+  }, []);
+
   async function ensureLead(business: CampaignBusiness): Promise<string | null> {
     if (business.leadId) return business.leadId;
     try {
@@ -204,7 +226,10 @@ export default function CampaignDetailPage() {
     }
   }
 
-  async function handleCreateDemo(business: CampaignBusiness) {
+  async function handleCreateDemo(
+    business: CampaignBusiness,
+    provider: "demoapp" | "claude" = "demoapp",
+  ) {
     setCreatingDemoId(business.id);
     setError(null);
     try {
@@ -213,13 +238,19 @@ export default function CampaignDetailPage() {
       setDemoToast(
         `Your demo for ${business.title} is in progress. Check back in a few minutes.`,
       );
-      const res = await fetch(`/api/leads/${leadId}/demo`, { method: "POST" });
-      const data = (await res.json()) as { error?: string };
+      const endpoint = provider === "claude" ? "demo-claude" : "demo";
+      const res = await fetch(`/api/leads/${leadId}/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ campaignId }),
+      });
+      const data = (await res.json()) as { error?: string; warning?: string | null };
       if (!res.ok) {
         setError(data.error ?? "Failed to create demo");
         setDemoToast(null);
         return;
       }
+      if (data.warning) setError(data.warning);
       if (res.status !== 202) {
         setDemoToast(`Demo for ${business.title} is ready.`);
       }
@@ -442,6 +473,15 @@ export default function CampaignDetailPage() {
           ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
+          {!isTerminal && (
+            <button
+              type="button"
+              onClick={() => setShowSettings(true)}
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              Settings
+            </button>
+          )}
           {campaign.status === "draft" && (
             <>
               <button
@@ -668,7 +708,21 @@ export default function CampaignDetailPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {/* Create Demo stays hidden until a proposal exists
                             for this business — proposal comes first. */}
-                        {business.demoEnabled && business.hasProposal && (
+                        {claudeDemoActive && business.hasProposal && (
+                          <button
+                            type="button"
+                            onClick={() => void handleCreateDemo(business, "claude")}
+                            disabled={creatingDemoId === business.id}
+                            className="rounded-lg border border-violet-300 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-60 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40"
+                          >
+                            {creatingDemoId === business.id
+                              ? "Creating…"
+                              : business.demoUrl
+                                ? "Recreate Demo with Claude"
+                                : "Create Demo with Claude"}
+                          </button>
+                        )}
+                        {!claudeDemoActive && business.demoEnabled && business.hasProposal && (
                           <button
                             type="button"
                             onClick={() => void handleCreateDemo(business)}
@@ -729,6 +783,20 @@ export default function CampaignDetailPage() {
           onClose={() => setProposalModalOpen(false)}
           onSave={handleSaveProposal}
           onSendWhatsApp={handleSendWhatsApp}
+          claudeDemoActive={claudeDemoActive}
+          campaignId={campaignId}
+        />
+      )}
+
+      {showSettings && (
+        <CampaignSettingsModal
+          campaignId={campaignId}
+          currentTemplate={campaign.demoTemplate ?? null}
+          onClose={() => setShowSettings(false)}
+          onSaved={(demoTemplate) => {
+            setCampaign((prev) => (prev ? { ...prev, demoTemplate } : prev));
+            setShowSettings(false);
+          }}
         />
       )}
 
