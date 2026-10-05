@@ -2,6 +2,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import {
   getLLMConfig,
+  MAX_COMPETITOR_PICKS,
   pickNearestCompetitors,
   type CompetitorCandidate,
 } from "@/lib/llm";
@@ -13,10 +14,17 @@ import {
   searches,
 } from "@/lib/db/schema";
 import { isApifyConfigured } from "@/lib/apify-traffic";
-import { APIFY_RENT_MESSAGE, getWebsiteStats } from "@/lib/website-stats";
+import { APIFY_RENT_MESSAGE, getWebsiteStatsBatch } from "@/lib/website-stats";
 import type { CompetitorWithStats, CompetitorsResponse, LeadDetail } from "@/lib/types";
 
-const PICK_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+// Matches the website-stats cache TTL so a lead keeps the same competitors (and
+// therefore the same cached stats) between proposal previews.
+function normalizeCompetitorUrl(url: string): string {
+  const trimmed = url.trim();
+  return /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+const PICK_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function GET(
   request: Request,
@@ -114,9 +122,9 @@ export async function GET(
     const validCandidateIds = new Set(candidates.map((c) => c.id));
 
     if (cacheFresh) {
-      competitorIds = cachedPick.competitorIds.filter((id) =>
-        validCandidateIds.has(id),
-      );
+      competitorIds = cachedPick.competitorIds
+        .filter((id) => validCandidateIds.has(id))
+        .slice(0, MAX_COMPETITOR_PICKS);
       pickSource = "cache";
     }
 
@@ -173,33 +181,28 @@ export async function GET(
       .map((id) => candidates.find((c) => c.id === id))
       .filter((c): c is (typeof candidates)[number] => Boolean(c));
 
-    const competitorsWithStats: CompetitorWithStats[] = await Promise.all(
-      pickedRows.map(async (competitor) => {
-        if (!includeStats) {
-          return {
-            id: competitor.id,
-            title: competitor.title,
-            website: competitor.website!,
-            address: competitor.address,
-            stats: {
-              trafficLabel: null,
-              trafficEstimate: null,
-              websiteAge: null,
-              lastUpdated: null,
-              source: "measured" as const,
-            },
-          };
-        }
-        const stats = await getWebsiteStats(competitor.website!, {
-          bypassCache: refreshStats,
-        });
-        return {
-          id: competitor.id,
-          title: competitor.title,
-          website: competitor.website!,
-          address: competitor.address,
-          stats,
-        };
+    // One batched lookup for every picked competitor: cached sites are free and
+    // the rest share a single Apify run. Results persist in the stats cache.
+    const statsByUrl = includeStats
+      ? await getWebsiteStatsBatch(
+          pickedRows.map((competitor) => competitor.website!),
+          { bypassCache: refreshStats },
+        )
+      : null;
+
+    const competitorsWithStats: CompetitorWithStats[] = pickedRows.map(
+      (competitor) => ({
+        id: competitor.id,
+        title: competitor.title,
+        website: competitor.website!,
+        address: competitor.address,
+        stats: (statsByUrl?.get(normalizeCompetitorUrl(competitor.website!)) ?? {
+          trafficLabel: null,
+          trafficEstimate: null,
+          websiteAge: null,
+          lastUpdated: null,
+          source: "measured" as const,
+        }),
       }),
     );
 

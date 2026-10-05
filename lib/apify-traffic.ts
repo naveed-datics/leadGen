@@ -79,14 +79,20 @@ function latestMonthlyVisits(
   return entries[0]?.[1] ?? null;
 }
 
-function buildActorInput(actorId: string, domain: string): Record<string, unknown> {
-  if (actorId.includes("ecomdate") || actorId.includes("similarweb-scraper")) {
-    return { domains: [domain] };
+/** Actors whose input takes a `domains` list, so one run can cover many sites. */
+function supportsDomainList(actorId: string): boolean {
+  return (
+    actorId.includes("ecomdate") ||
+    actorId.includes("similarweb-scraper") ||
+    actorId.includes("pro100chok")
+  );
+}
+
+function buildActorInput(actorId: string, domains: string[]): Record<string, unknown> {
+  if (supportsDomainList(actorId)) {
+    return { domains };
   }
-  if (actorId.includes("pro100chok")) {
-    return { domains: [domain] };
-  }
-  return { url: domain };
+  return { url: domains[0] };
 }
 
 function parseTrafficFromText(text: string): {
@@ -239,14 +245,16 @@ function parseApifyError(data: unknown): Error | null {
  * Runs Apify SimilarWeb traffic actor (sync) and returns dataset items.
  */
 export async function runApifyTrafficAnalysis(
-  websiteUrl: string,
+  websiteUrls: string | string[],
 ): Promise<Record<string, unknown>[]> {
   const token = process.env.APIFY_API_TOKEN?.trim();
   if (!token) {
     throw new Error("APIFY_API_TOKEN is not configured");
   }
 
-  const domain = extractDomain(websiteUrl) ?? websiteUrl.trim();
+  const domains = (Array.isArray(websiteUrls) ? websiteUrls : [websiteUrls]).map(
+    (url) => extractDomain(url) ?? url.trim(),
+  );
   const actorId = getApifyActorId();
 
   const endpoint = new URL(getApifyActorUrl());
@@ -258,7 +266,7 @@ export async function runApifyTrafficAnalysis(
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(buildActorInput(actorId, domain)),
+    body: JSON.stringify(buildActorInput(actorId, domains)),
     signal: AbortSignal.timeout((APIFY_SYNC_TIMEOUT_SEC + 10) * 1000),
   });
 
@@ -286,24 +294,17 @@ export async function runApifyTrafficAnalysis(
   return [];
 }
 
-/**
- * Fetches website traffic and domain stats via Apify actor.
- */
-export async function fetchApifyWebsiteStats(
-  websiteUrl: string,
-): Promise<Partial<WebsiteStats>> {
-  if (!isApifyConfigured()) {
-    return { source: "apify" };
-  }
-
-  const domain = extractDomain(websiteUrl) ?? websiteUrl.trim();
-  const items = await runApifyTrafficAnalysis(domain);
+function statsFromRows(
+  rows: Record<string, unknown>[],
+  domain: string,
+  allowFirstItemFallback: boolean,
+): Partial<WebsiteStats> {
   const match =
-    items.find(
+    rows.find(
       (row) =>
         typeof row.domain === "string" &&
         row.domain.replace(/^www\./, "") === domain,
-    ) ?? items[0];
+    ) ?? (allowFirstItemFallback ? rows[0] : undefined);
 
   if (!match || typeof match !== "object") {
     return {
@@ -324,6 +325,54 @@ export async function fetchApifyWebsiteStats(
   }
 
   return parsed;
+}
+
+/**
+ * Fetches website traffic and domain stats via Apify actor.
+ */
+export async function fetchApifyWebsiteStats(
+  websiteUrl: string,
+): Promise<Partial<WebsiteStats>> {
+  if (!isApifyConfigured()) {
+    return { source: "apify" };
+  }
+
+  const domain = extractDomain(websiteUrl) ?? websiteUrl.trim();
+  const rows = await runApifyTrafficAnalysis(domain);
+  return statsFromRows(rows, domain, true);
+}
+
+/**
+ * Fetches stats for many sites in ONE actor run (one billable request).
+ * Results are keyed by the input URL. Throws if the run itself fails.
+ *
+ * Actors that only accept a single URL fall back to one run per site.
+ */
+export async function fetchApifyWebsiteStatsBatch(
+  websiteUrls: string[],
+): Promise<Map<string, Partial<WebsiteStats>>> {
+  const results = new Map<string, Partial<WebsiteStats>>();
+  if (websiteUrls.length === 0) return results;
+
+  if (!isApifyConfigured()) {
+    for (const url of websiteUrls) results.set(url, { source: "apify" });
+    return results;
+  }
+
+  if (!supportsDomainList(getApifyActorId())) {
+    for (const url of websiteUrls) {
+      results.set(url, await fetchApifyWebsiteStats(url));
+    }
+    return results;
+  }
+
+  const rows = await runApifyTrafficAnalysis(websiteUrls);
+  for (const url of websiteUrls) {
+    const domain = extractDomain(url) ?? url.trim();
+    // A single-site run may omit `domain`, so only then trust the first row.
+    results.set(url, statsFromRows(rows, domain, websiteUrls.length === 1));
+  }
+  return results;
 }
 
 export { DATASCOUT_ACTOR, DEFAULT_ACTOR };

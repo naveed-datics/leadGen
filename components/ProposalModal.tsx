@@ -195,7 +195,7 @@ export function ProposalModal({
 
       try {
         const [competitorsRes, templateRes] = await Promise.all([
-          fetch(`/api/leads/${leadId}/competitors?includeStats=true&refreshStats=true`),
+          fetch(`/api/leads/${leadId}/competitors?includeStats=true`),
           fetch(`/api/searches/${searchId}/settings/proposal-template`, {
             cache: "no-store",
           }),

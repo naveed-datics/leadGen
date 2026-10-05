@@ -141,7 +141,7 @@ function parseJson<T>(raw: string): T {
 }
 
 // Over-pick so the proposal still has 3 after zero-traffic sites are dropped.
-const MAX_COMPETITOR_PICKS = 5;
+export const MAX_COMPETITOR_PICKS = 3;
 
 export async function pickNearestCompetitors(
   target: CompetitorTarget,

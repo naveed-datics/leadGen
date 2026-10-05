@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import {
   ApifyActorNotRentedError,
   fetchApifyWebsiteStats,
+  fetchApifyWebsiteStatsBatch,
   isApifyConfigured,
 } from "@/lib/apify-traffic";
 import { estimateWebsiteStats, getLLMConfig } from "@/lib/llm";
@@ -14,6 +15,8 @@ const FETCH_TIMEOUT_MS = 8000;
 
 export interface GetWebsiteStatsOptions {
   bypassCache?: boolean;
+  /** Apify result already fetched (e.g. by a batch run); skips the per-site call. */
+  prefetchedApify?: Partial<WebsiteStats>;
 }
 
 export const APIFY_RENT_URL = "https://apify.com/ecomdate/similarweb-scraper";
@@ -194,9 +197,6 @@ async function getCachedStats(url: string): Promise<WebsiteStats | null> {
   if (age > CACHE_TTL_MS) return null;
 
   const source = (row.source as WebsiteStats["source"]) ?? "measured";
-  if (isApifyConfigured() && (source === "ai" || source === "mixed")) {
-    return null;
-  }
 
   return {
     trafficLabel: row.trafficLabel,
@@ -235,6 +235,17 @@ async function saveCachedStats(url: string, stats: WebsiteStats): Promise<void> 
     });
 }
 
+/** Maps a failed Apify run to the partial the merge step expects. */
+function apifyFailurePartial(url: string, error: unknown): Partial<WebsiteStats> {
+  if (error instanceof ApifyActorNotRentedError) {
+    console.error(`[website-stats] Apify actor not rented for ${url}`);
+    return {};
+  }
+  const message = error instanceof Error ? error.message : "Apify request failed";
+  console.error(`[website-stats] Apify traffic fetch failed for ${url}: ${message}`);
+  return { source: "apify", trafficError: message };
+}
+
 export async function getWebsiteStats(
   websiteUrl: string,
   options?: GetWebsiteStatsOptions,
@@ -250,20 +261,13 @@ export async function getWebsiteStats(
   const domain = extractDomain(url);
 
   let apifyPartial: Partial<WebsiteStats> = {};
-  if (apifyConfigured) {
+  if (options?.prefetchedApify) {
+    apifyPartial = options.prefetchedApify;
+  } else if (apifyConfigured) {
     try {
       apifyPartial = await fetchApifyWebsiteStats(url);
     } catch (error) {
-      if (error instanceof ApifyActorNotRentedError) {
-        console.error(`[website-stats] Apify actor not rented for ${url}`);
-      } else {
-        const message = error instanceof Error ? error.message : "Apify request failed";
-        console.error(`[website-stats] Apify traffic fetch failed for ${url}: ${message}`);
-        apifyPartial = {
-          source: "apify",
-          trafficError: message,
-        };
-      }
+      apifyPartial = apifyFailurePartial(url, error);
     }
   }
 
@@ -330,4 +334,51 @@ export async function getWebsiteStats(
   );
   await saveCachedStats(url, stats);
   return stats;
+}
+
+/**
+ * Stats for several sites using at most ONE Apify run.
+ *
+ * Sites with a fresh cached row (7 days) cost nothing; only the uncached ones
+ * go to Apify together in a single batch. Every result is saved to the cache,
+ * so previewing the same proposal again makes no new Apify request.
+ */
+export async function getWebsiteStatsBatch(
+  websiteUrls: string[],
+  options?: Pick<GetWebsiteStatsOptions, "bypassCache">,
+): Promise<Map<string, WebsiteStats>> {
+  const urls = Array.from(new Set(websiteUrls.map(normalizeUrl).filter(Boolean)));
+  const results = new Map<string, WebsiteStats>();
+
+  const uncached: string[] = [];
+  await Promise.all(
+    urls.map(async (url) => {
+      const cached = options?.bypassCache ? null : await getCachedStats(url);
+      if (cached) results.set(url, cached);
+      else uncached.push(url);
+    }),
+  );
+
+  let prefetched = new Map<string, Partial<WebsiteStats>>();
+  if (uncached.length > 0 && isApifyConfigured()) {
+    try {
+      prefetched = await fetchApifyWebsiteStatsBatch(uncached);
+    } catch (error) {
+      for (const url of uncached) {
+        prefetched.set(url, apifyFailurePartial(url, error));
+      }
+    }
+  }
+
+  await Promise.all(
+    uncached.map(async (url) => {
+      const stats = await getWebsiteStats(url, {
+        bypassCache: true,
+        prefetchedApify: prefetched.get(url) ?? {},
+      });
+      results.set(url, stats);
+    }),
+  );
+
+  return results;
 }

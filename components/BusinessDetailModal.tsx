@@ -27,7 +27,7 @@ export function BusinessDetailModal({
     setError(null);
     setData(null);
 
-    fetch(`/api/leads/${leadId}/competitors?includeStats=true&refreshStats=true`)
+    fetch(`/api/leads/${leadId}/competitors?includeStats=true`)
       .then(async (res) => {
         const json = await res.json();
         if (!res.ok) {
