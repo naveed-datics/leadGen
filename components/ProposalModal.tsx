@@ -43,6 +43,10 @@ interface ProposalModalProps {
   onSave: (body: string) => Promise<ProposalSummary>;
   onSendWhatsApp: (body: string, testPhone?: string) => Promise<void>;
   onDemoCreated?: (proposal: ProposalSummary) => void;
+  /** True when the agent's active demo mode is Claude (and it is configured). */
+  claudeDemoActive?: boolean;
+  /** Campaign the demo is created from (selects the campaign template). */
+  campaignId?: string;
 }
 
 export function ProposalModal({
@@ -63,6 +67,8 @@ export function ProposalModal({
   onSave,
   onSendWhatsApp,
   onDemoCreated,
+  claudeDemoActive = false,
+  campaignId,
 }: ProposalModalProps) {
   const [body, setBody] = useState(initialBody);
   const [templateLoading, setTemplateLoading] = useState(false);
@@ -106,14 +112,21 @@ export function ProposalModal({
     setDemoCreating(true);
     setDemoError(null);
     try {
-      const res = await fetch(`/api/leads/${leadId}/demo`, { method: "POST" });
+      const endpoint = claudeDemoActive ? "demo-claude" : "demo";
+      const res = await fetch(`/api/leads/${leadId}/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ campaignId }),
+      });
       const data = (await res.json()) as {
         demoUrl?: string;
         proposal?: ProposalSummary;
         error?: string;
+        warning?: string | null;
       };
       if (!res.ok) throw new Error(data.error ?? "Failed to create demo");
 
+      if (data.warning) setDemoError(data.warning);
       const nextDemoUrl = data.demoUrl ?? null;
       setDemoUrl(nextDemoUrl);
       if (nextDemoUrl) {
@@ -130,7 +143,7 @@ export function ProposalModal({
     } finally {
       setDemoCreating(false);
     }
-  }, [leadId, onDemoCreated]);
+  }, [leadId, onDemoCreated, claudeDemoActive, campaignId]);
 
   useEffect(() => {
     if (!open) return;
@@ -319,7 +332,9 @@ export function ProposalModal({
   if (!open) return null;
 
   const canCreateDemo =
-    !readOnly && Boolean(searchSettings?.demoEnabled) && !demoCreating;
+    !readOnly &&
+    (claudeDemoActive || Boolean(searchSettings?.demoEnabled)) &&
+    !demoCreating;
 
   const demoDisabledReason = null;
 
@@ -475,19 +490,21 @@ export function ProposalModal({
               {templateLoading ? "Regenerating…" : "Regenerate"}
             </button>
           )}
-          {!readOnly && searchSettings?.demoEnabled && (
+          {!readOnly && (claudeDemoActive || searchSettings?.demoEnabled) && (
             <button
               type="button"
               disabled={!canCreateDemo}
               onClick={() => void handleCreateDemo()}
               title={demoDisabledReason ?? (demoUrl ? "Recreate demo site" : "Create demo site")}
-              className="rounded-lg border border-sky-300 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-700 dark:text-sky-200"
+              className={
+                claudeDemoActive
+                  ? "rounded-lg border border-violet-300 px-4 py-2 text-sm font-medium text-violet-800 hover:bg-violet-50 disabled:opacity-60 dark:border-violet-700 dark:text-violet-200"
+                  : "rounded-lg border border-sky-300 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-50 disabled:opacity-60 dark:border-sky-700 dark:text-sky-200"
+              }
             >
               {demoCreating
                 ? "Creating demo…"
-                : demoUrl
-                  ? "Recreate demo"
-                  : "Create demo"}
+                : `${demoUrl ? "Recreate demo" : "Create demo"}${claudeDemoActive ? " with Claude" : ""}`}
             </button>
           )}
           {!readOnly && (

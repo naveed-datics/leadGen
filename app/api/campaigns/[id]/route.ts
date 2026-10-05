@@ -20,6 +20,7 @@ const PatchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   description: z.string().max(500).optional(),
   status: z.enum(CAMPAIGN_STATUSES).optional(),
+  demoTemplate: z.string().max(120).nullable().optional(),
 });
 
 /** Forward-only lifecycle: draft -> active -> completed/archived (terminal). */
@@ -111,6 +112,7 @@ export async function GET(request: Request, context: RouteContext) {
         name: campaign.name,
         description: campaign.description,
         status: campaign.status,
+        demoTemplate: campaign.demoTemplate,
         createdAt: campaign.createdAt.toISOString(),
         updatedAt: campaign.updatedAt.toISOString(),
       },
@@ -180,7 +182,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, description, status } = parsed.data;
+    const { name, description, status, demoTemplate } = parsed.data;
 
     if (status && !ALLOWED_TRANSITIONS[campaign.status]?.includes(status)) {
       return NextResponse.json(
@@ -195,6 +197,9 @@ export async function PATCH(request: Request, context: RouteContext) {
         ...(name !== undefined ? { name } : {}),
         ...(description !== undefined ? { description } : {}),
         ...(status !== undefined ? { status } : {}),
+        ...(demoTemplate !== undefined
+          ? { demoTemplate: demoTemplate?.trim() || null }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(campaigns.id, id))
@@ -210,6 +215,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         name: updated.name,
         description: updated.description,
         status: updated.status,
+        demoTemplate: updated.demoTemplate,
         createdAt: updated.createdAt.toISOString(),
         updatedAt: updated.updatedAt.toISOString(),
       },

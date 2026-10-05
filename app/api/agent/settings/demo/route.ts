@@ -23,6 +23,7 @@ export async function GET() {
       defaultDemoPageId: settings?.defaultDemoPageId ?? null,
       wpBaseUrl: settings?.wpBaseUrl ?? null,
       wpUsername: settings?.wpUsername ?? null,
+      wpPluginApiKeyConfigured: settings?.wpPluginApiKeyConfigured ?? false,
     });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -39,6 +40,7 @@ const PutSchema = z.object({
   wpBaseUrl: z.string().optional(),
   wpUsername: z.string().optional(),
   wpAppPassword: z.string().optional(),
+  wpPluginApiKey: z.string().optional(),
   defaultDemoPageId: z.number().int().positive().nullable().optional(),
 });
 
@@ -84,6 +86,10 @@ export async function PUT(request: Request) {
       patch.wpAppPasswordEnc = encryptSecret(parsed.data.wpAppPassword);
     }
 
+    if (parsed.data.wpPluginApiKey?.trim()) {
+      patch.wpPluginApiKeyEnc = encryptSecret(parsed.data.wpPluginApiKey);
+    }
+
     if (parsed.data.defaultDemoPageId !== undefined) {
       patch.defaultDemoPageId = parsed.data.defaultDemoPageId;
     }
@@ -118,6 +124,7 @@ export async function PUT(request: Request) {
         wpBaseUrl: users.wpBaseUrl,
         wpUsername: users.wpUsername,
         wpAppPasswordEnc: users.wpAppPasswordEnc,
+        wpPluginApiKeyEnc: users.wpPluginApiKeyEnc,
         defaultDemoPageId: users.defaultDemoPageId,
       });
 
@@ -132,6 +139,7 @@ export async function PUT(request: Request) {
       defaultDemoPageId: updated.defaultDemoPageId,
       wpBaseUrl: updated.wpBaseUrl,
       wpUsername: updated.wpUsername,
+      wpPluginApiKeyConfigured: Boolean(updated.wpPluginApiKeyEnc),
     });
   } catch (error) {
     if (error instanceof AuthError) {

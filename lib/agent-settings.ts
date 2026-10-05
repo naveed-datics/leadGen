@@ -11,6 +11,7 @@ export type AgentWordPressCredentials = {
   baseUrl: string;
   username: string;
   appPassword: string;
+  pluginApiKey: string | null;
   defaultDemoPageId: number | null;
   demoEnabled: boolean;
 };
@@ -24,6 +25,7 @@ export async function getAgentWordPressSettings(agentId: string) {
       wpUsername: users.wpUsername,
       wpAppPasswordEnc: users.wpAppPasswordEnc,
       defaultDemoPageId: users.defaultDemoPageId,
+      wpPluginApiKeyEnc: users.wpPluginApiKeyEnc,
     })
     .from(users)
     .where(eq(users.id, agentId))
@@ -41,6 +43,7 @@ export async function getAgentWordPressSettings(agentId: string) {
     defaultDemoPageId: row.defaultDemoPageId,
     wpBaseUrl: row.wpBaseUrl,
     wpUsername: row.wpUsername,
+    wpPluginApiKeyConfigured: Boolean(row.wpPluginApiKeyEnc),
   };
 }
 
@@ -54,6 +57,7 @@ export async function getAgentWordPressCredentials(
       wpBaseUrl: users.wpBaseUrl,
       wpUsername: users.wpUsername,
       wpAppPasswordEnc: users.wpAppPasswordEnc,
+      wpPluginApiKeyEnc: users.wpPluginApiKeyEnc,
       defaultDemoPageId: users.defaultDemoPageId,
     })
     .from(users)
@@ -76,6 +80,7 @@ export async function getAgentWordPressCredentials(
     baseUrl: normalizeWordPressBaseUrl(row.wpBaseUrl!),
     username: row.wpUsername!,
     appPassword: decryptSecret(row.wpAppPasswordEnc!),
+    pluginApiKey: row.wpPluginApiKeyEnc ? decryptSecret(row.wpPluginApiKeyEnc) : null,
     defaultDemoPageId: row.defaultDemoPageId,
   };
 }
@@ -129,6 +134,39 @@ export async function getAgentDemoUrlWebhookSecret(
   return null;
 }
 
+export type DemoProvider = "demoapp" | "claude";
+
+export async function getAgentClaudeConfig(agentId: string): Promise<{
+  url: string | null;
+  token: string | null;
+  betaHeader: string | null;
+  dryRun: boolean;
+  demoProvider: DemoProvider;
+}> {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      claudeRoutineUrl: users.claudeRoutineUrl,
+      claudeRoutineTokenEnc: users.claudeRoutineTokenEnc,
+      claudeBetaHeader: users.claudeBetaHeader,
+      claudeDryRun: users.claudeDryRun,
+      demoProvider: users.demoProvider,
+    })
+    .from(users)
+    .where(eq(users.id, agentId))
+    .limit(1);
+
+  return {
+    url: row?.claudeRoutineUrl ?? null,
+    token: row?.claudeRoutineTokenEnc
+      ? decryptSecret(row.claudeRoutineTokenEnc)
+      : null,
+    betaHeader: row?.claudeBetaHeader ?? null,
+    dryRun: row?.claudeDryRun ?? true,
+    demoProvider: row?.demoProvider === "claude" ? "claude" : "demoapp",
+  };
+}
+
 export function serializeProposal(proposal: {
   id: string;
   status: string;
@@ -140,6 +178,7 @@ export function serializeProposal(proposal: {
   demoUrl?: string | null;
   demoStatus?: string | null;
   demoGenLeadId?: string | null;
+  demoProvider?: string | null;
 }) {
   return {
     id: proposal.id,
@@ -152,5 +191,6 @@ export function serializeProposal(proposal: {
     demoUrl: proposal.demoUrl ?? null,
     demoStatus: proposal.demoStatus ?? "none",
     demoGenLeadId: proposal.demoGenLeadId ?? null,
+    demoProvider: proposal.demoProvider ?? null,
   };
 }
